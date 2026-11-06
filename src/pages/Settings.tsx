@@ -115,6 +115,20 @@ export default function Settings() {
     <>
       <PageHead title="Settings" sub="Reviewer identity, integrations, Google Sheets sync and data management" actions={<Link className="btn" to="/settings/setup"><BookOpen size={15} />Setup guide</Link>} />
 
+      <Card className="mb16" title={<span className="row"><FileSpreadsheet size={15} />Import workbook (.xlsx)</span>} sub="Load AI OFFICE – DRAMA PRODUCTION HQ without a server connection. In Google Sheets: File → Download → Microsoft Excel (.xlsx)." actions={
+        <button className="btn primary" disabled={importing} onClick={() => xlsxRef.current?.click()}>{importing ? <span className="spinner" /> : <Upload size={14} />}Choose .xlsx file</button>
+      }>
+        <input ref={xlsxRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={(e) => askImport(e.target.files?.[0])} />
+        {!importReport && <p className="small muted">Reads every worksheet (EPISODES, PRODUCTION, CHARACTERS, LOCATIONS, SCRIPTS, SHOT_LIST, ASSETS, PUBLISHING, ANALYTICS, CONTINUITY, SCRIPT_RUNS) using the exact workbook columns. Last import: {fmtDateTime(s.settings.lastImport)}.</p>}
+        {importReport && (
+          <div className="table-wrap"><table className="table"><thead><tr><th>Worksheet</th><th>Rows</th><th>Result</th></tr></thead><tbody>
+            {importReport.map((r) => <tr key={r.sheet}><td className="mono">{r.sheet}</td><td>{r.rows}</td><td className="xs">
+              {r.missing ? <span style={{ color: 'var(--warning)' }}>{r.note}</span> : <span style={{ color: 'var(--success)' }}>Imported{r.note ? ` · ${r.note}` : ''}</span>}
+              {r.unmappedHeaders.length > 0 && <div className="faint">Not used by the app: {r.unmappedHeaders.join(', ')}</div>}
+            </td></tr>)}
+          </tbody></table></div>
+        )}
+      </Card>
       <div className="grid g2">
         <Card title="Reviewer & workflow">
           <div className="col gap16">
@@ -147,20 +161,6 @@ export default function Settings() {
       </div>
 
 
-      <Card className="mt16" title={<span className="row"><FileSpreadsheet size={15} />Import workbook (.xlsx)</span>} sub="Load AI OFFICE – DRAMA PRODUCTION HQ without a server connection. In Google Sheets: File → Download → Microsoft Excel (.xlsx)." actions={
-        <button className="btn primary" disabled={importing} onClick={() => xlsxRef.current?.click()}>{importing ? <span className="spinner" /> : <Upload size={14} />}Choose .xlsx file</button>
-      }>
-        <input ref={xlsxRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={(e) => askImport(e.target.files?.[0])} />
-        {!importReport && <p className="small muted">Reads every worksheet (EPISODES, PRODUCTION, CHARACTERS, LOCATIONS, SCRIPTS, SHOT_LIST, ASSETS, PUBLISHING, ANALYTICS, CONTINUITY, SCRIPT_RUNS) using the exact workbook columns. Last import: {fmtDateTime(s.settings.lastImport)}.</p>}
-        {importReport && (
-          <div className="table-wrap"><table className="table"><thead><tr><th>Worksheet</th><th>Rows</th><th>Result</th></tr></thead><tbody>
-            {importReport.map((r) => <tr key={r.sheet}><td className="mono">{r.sheet}</td><td>{r.rows}</td><td className="xs">
-              {r.missing ? <span style={{ color: 'var(--warning)' }}>{r.note}</span> : <span style={{ color: 'var(--success)' }}>Imported{r.note ? ` · ${r.note}` : ''}</span>}
-              {r.unmappedHeaders.length > 0 && <div className="faint">Not used by the app: {r.unmappedHeaders.join(', ')}</div>}
-            </td></tr>)}
-          </tbody></table></div>
-        )}
-      </Card>
 
       <Card className="mt16" title="Integrations" sub="States come from the server. “Connected” is shown only after a successful live test." actions={<button className="btn sm" onClick={refresh} disabled={refreshing}><RefreshCw size={13} className={refreshing ? 'spin' : ''} />Refresh</button>} flush>
         {s.backendOnline === false && <div style={{ padding: 16 }}><Banner tone="danger">The API server is not reachable. Start it with <code className="inline">npm run dev</code> (or <code className="inline">npm start</code> in production). Without it the app runs in local demo mode and no external service can connect.</Banner></div>}
