@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, BookOpen, Bot, CalendarDays, CheckSquare, Clapperboard, Cog, Database, Film, FolderKanban,
+  BarChart3, BookOpen, Bot, Building2, CalendarDays, CheckSquare, Clapperboard, Cog, Database, Film, FolderKanban,
   LayoutDashboard, ListVideo, MapPin, Menu, Mic, PenSquare, Scissors, Users, Wallet,
 } from 'lucide-react';
 import { useStore } from '../store/store';
@@ -9,6 +9,7 @@ import { Toasts } from './ui';
 
 export const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/office', label: 'Virtual Office', icon: Building2 },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/episodes', label: 'Episodes', icon: ListVideo },
   { to: '/script', label: 'Script Studio', icon: PenSquare },

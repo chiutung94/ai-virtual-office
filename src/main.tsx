@@ -5,6 +5,7 @@ import './styles.css';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
+import Office from './pages/Office';
 import Episodes from './pages/Episodes';
 import EpisodeDetail from './pages/EpisodeDetail';
 import ScriptStudio from './pages/ScriptStudio';
@@ -29,6 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="office" element={<Office />} />
           <Route path="projects" element={<Projects />} />
           <Route path="episodes" element={<Episodes />} />
           <Route path="episodes/:id" element={<EpisodeDetail />} />
