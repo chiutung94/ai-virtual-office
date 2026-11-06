@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, History, Lock, Plus, Save, Send, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import type { DialogueLine, Scene, ScriptRun } from '../../shared/types';
 import { scenesFromAiJson } from '../../shared/workbook';
-import { pushSheet } from '../lib/sync';
+import { pullSheet, pushSheet } from '../lib/sync';
 import { latestScript, uid, useStore } from '../store/store';
 import { api } from '../lib/api';
 import { Banner, Card, ConfirmDialog, Field, PageHead, StatusPill, fmtDateTime, type ConfirmOpts } from '../components/ui';
@@ -279,7 +279,21 @@ function AiQueue({ episodeId, locked, onLoad }: { episodeId: string; locked: boo
   };
   const decide = (ok: boolean) => {
     void save({ ...run, humanApproval: ok ? 'APPROVED' : 'REJECTED', queueStatus: ok ? 'DONE' : 'HOLD' }, `${run.id} ${ok ? 'approved' : 'rejected'}`);
-    if (ok) { try { s.saveScript(episodeId, scenesFromAiJson(run.outputJson, s.characters, uid), `AI draft ${run.id} accepted`, 'ai'); } catch { /* already reported on load */ } }
+    if (ok) {
+      try {
+        s.saveScript(episodeId, scenesFromAiJson(run.outputJson, s.characters, uid), `AI draft ${run.id} accepted`, 'ai');
+        if (sheetsOk) void pushSheet('SCRIPTS').then(() => s.toast('success', 'Accepted script written to the SCRIPTS sheet')).catch((e) => s.toast('error', `SCRIPTS sync failed: ${(e as Error).message}`));
+      } catch (e) { s.toast('error', `Could not read output_json: ${(e as Error).message}`); }
+    }
+  };
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      await pullSheet('SCRIPT_RUNS');
+      const r = useStore.getState().scriptRuns.filter((x) => x.episodeId === episodeId).sort((a, b) => b.id.localeCompare(a.id))[0];
+      s.toast(r?.queueStatus === 'REVIEW' ? 'success' : 'info', r ? `${r.id}: ${r.queueStatus}${r.queueStatus === 'REVIEW' ? ' — AI output ready for review' : ''}` : 'No runs found');
+    } catch (e) { s.toast('error', `Could not read SCRIPT_RUNS: ${(e as Error).message}`); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -300,7 +314,10 @@ function AiQueue({ episodeId, locked, onLoad }: { episodeId: string; locked: boo
         </div>
       ) : <div className="small muted">No AI runs for this episode yet.</div>}
       <div className="divider" />
-      <button className="btn sm" onClick={queue} disabled={busy || locked || run?.queueStatus === 'GENERATE' || run?.queueStatus === 'REVIEW'}>{busy ? <span className="spinner" /> : <Sparkles size={13} />}Queue for AI generation</button>
+      <div className="row wrap">
+        <button className="btn sm" onClick={queue} disabled={busy || locked || run?.queueStatus === 'GENERATE' || run?.queueStatus === 'REVIEW'}>{busy ? <span className="spinner" /> : <Sparkles size={13} />}Queue for AI generation</button>
+        {sheetsOk && <button className="btn sm ghost" onClick={refresh} disabled={busy}>Check for results</button>}
+      </div>
       <div className="xs faint mt8">Sets queue_status = GENERATE. Your Make scenario calls OpenAI, writes output_json and sets REVIEW. Nothing becomes the script until a person accepts it here.</div>
     </Card>
   );
