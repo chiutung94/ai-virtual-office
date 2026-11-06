@@ -8,15 +8,38 @@ import { SHEETS, normKey, normaliseHeader, sheetSpec, type Row } from '../shared
 const API = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 /** Credentials from GOOGLE_SERVICE_ACCOUNT_KEY_FILE (the downloaded JSON) or the email + key variables. */
+let keyProblem = '';
+function resolveKeyFile(file: string) {
+  const p = path.resolve(file);
+  if (fs.existsSync(p)) return p;
+  // Windows often hides extensions, producing "name.json.json".
+  if (fs.existsSync(p + '.json')) return p + '.json';
+  return null;
+}
 function credentials(): { email: string; key: string } | null {
+  keyProblem = '';
   const file = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE?.trim();
   if (file) {
-    try {
-      const j = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
-      if (j.client_email && j.private_key) return { email: j.client_email, key: j.private_key };
-    } catch {
+    const p = resolveKeyFile(file);
+    if (!p) {
+      const dir = path.dirname(path.resolve(file));
+      let found: string[] = [];
+      try {
+        found = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).filter((f) => {
+          try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8').replace(/^\uFEFF/, '')).type === 'service_account'; } catch { return false; }
+        });
+      } catch { /* ignore */ }
+      keyProblem = `Key file not found at ${path.resolve(file)}.` + (found.length ? ` Found a service-account key named “${found[0]}” in that folder — rename it to “${path.basename(file)}”.` : ' Move the JSON key downloaded from Google Cloud into the project folder and rename it.');
       return null;
     }
+    try {
+      const j = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, ''));
+      if (j.client_email && j.private_key) return { email: j.client_email, key: j.private_key };
+      keyProblem = `${path.basename(p)} is not a service-account key (no client_email/private_key). Download a JSON key from Google Cloud → Service account → Keys.`;
+    } catch {
+      keyProblem = `${path.basename(p)} could not be parsed as JSON. Re-download the key from Google Cloud.`;
+    }
+    return null;
   }
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
   const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
@@ -29,10 +52,9 @@ export function sheetsConfigured() {
 
 /** Human-readable reason when Sheets is not configured. */
 export function sheetsConfigProblem() {
-  const file = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE?.trim();
   if (!process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim()) return 'Set GOOGLE_SHEETS_SPREADSHEET_ID in .env.';
-  if (file && !credentials()) return `Could not read the key file “${file}” (path: ${path.resolve(file)}). Check the file name and that it is the JSON downloaded from Google Cloud.`;
-  return 'Set GOOGLE_SERVICE_ACCOUNT_KEY_FILE (path to the downloaded JSON) in .env.';
+  if (!credentials()) return keyProblem || 'Set GOOGLE_SERVICE_ACCOUNT_KEY_FILE (path to the downloaded JSON) in .env.';
+  return '';
 }
 
 export class HttpError extends Error {
