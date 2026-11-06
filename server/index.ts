@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IntegrationStatus } from '../shared/types.js';
 import { HttpError, readSheet, sheetsConfigured, testSheets, upsertSheet } from './sheets.js';
-import { WORKBOOK_SHEETS } from '../shared/sheetSchema.js';
+import { SHEETS } from '../shared/workbook.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -110,15 +110,15 @@ app.post(
 
 // ── Google Sheets ───────────────────────────────────────────────────────────
 app.get('/api/sheets', (_req, res) =>
-  res.json(WORKBOOK_SHEETS.map(({ sheet, description, synced, columns, key }) => ({ sheet, description, synced, key, headers: columns.map((c) => c.header) }))),
+  res.json(SHEETS.map(({ sheet, description, synced, headers, keyHeaders }) => ({ sheet, description, synced, keyHeaders, headers }))),
 );
 app.get('/api/sheets/:sheet', wrap(async (req, res) => res.json(await readSheet(req.params.sheet))));
 app.post(
   '/api/sheets/:sheet/upsert',
   wrap(async (req, res) => {
-    const records = req.body?.records;
-    if (!Array.isArray(records)) throw new HttpError(400, 'Body must be { records: [...] }');
-    res.json(await upsertSheet(req.params.sheet, records));
+    const rows = req.body?.rows;
+    if (!Array.isArray(rows)) throw new HttpError(400, 'Body must be { rows: [...] }');
+    res.json(await upsertSheet(req.params.sheet, rows));
   }),
 );
 
@@ -165,14 +165,16 @@ app.post(
   '/api/ai/generate-script',
   wrap(async (req, res) => {
     if (!env('OPENAI_API_KEY')) throw new HttpError(412, 'OpenAI is not configured. AI generation is disabled.');
-    const { episode, characters, locations, project, previousSynopses } = req.body ?? {};
+    const { episode, characters, locations, project, previousSynopses, continuity } = req.body ?? {};
     if (!episode?.id) throw new HttpError(400, 'episode is required');
     const system = `You are the head writer of a Chinese live-action vertical short drama (竖屏短剧). Write tight, hook-driven scenes. Output strict JSON only.`;
     const user = {
       task: `Write the script for ${episode.id} 《${episode.titleZh}》 (${episode.titleEn}).`,
       project,
       synopsis: episode.synopsis,
+      cliffhanger: episode.cliffhanger,
       previousSynopses,
+      continuityFromPreviousEpisode: continuity ?? null,
       targetDurationSeconds: episode.targetDuration,
       characters,
       locations,
@@ -181,10 +183,12 @@ app.post(
         '3–6 scenes. Each scene 8–25 seconds. Total close to the target duration.',
         'Open with a hook in the first 3 seconds; end on a cliffhanger.',
         'Use only the given character IDs and location IDs.',
+        'dialogue_cn: one line per speaker as "说话人：台词", lines separated by \\n. subtitle_en: matching English lines "Speaker: line".',
+        'Respect continuityFromPreviousEpisode (wardrobe, positions, constraints).',
         'camera: shot sizes and moves for 9:16 vertical framing.',
       ],
       outputSchema: {
-        scenes: [{ number: 1, locationId: 'L01', timeOfDay: 'Night', characterIds: ['C01'], visualAction: '', camera: '', sfx: '', duration: 15, dialogue: [{ characterId: 'C01', zh: '', en: '', emotion: '' }] }],
+        scenes: [{ scene_no: 1, scene_title: '', duration_sec: 12, location_id: 'L01', characters: 'C01;C03', visual_action: '', dialogue_cn: '顾念：……', subtitle_en: 'Gu Nian: …', camera_direction: '', sound_notes: '' }],
       },
     };
     const r = await fetch('https://api.openai.com/v1/chat/completions', {

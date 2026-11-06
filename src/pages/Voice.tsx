@@ -16,7 +16,7 @@ export default function Voice() {
   const cues = useMemo(() => (script ? buildCues(script.scenes) : []), [script]);
   const voiceIntegration = s.integrations?.find((i) => i.id === 'voice');
   const vl = (id: string): VoiceLine => s.voiceLines.find((v) => v.id === id) ?? { id, episodeId: epId, voiceStatus: 'Not Started', audioUrl: '' };
-  const speakers = [...new Set(cues.map((c) => c.characterId))];
+  const speakers = [...new Set(cues.map((c) => c.characterId).filter(Boolean))];
   const approved = cues.filter((c) => vl(c.lineId).voiceStatus === 'Approved').length;
 
   return (
@@ -41,7 +41,7 @@ export default function Voice() {
           <DataTable rows={cues} rowKey={(c) => c.lineId} pageSize={25} columns={[
             { key: 't', header: 'Time', render: (c) => <span className="mono nowrap">{fmtTs(c.start)}–{fmtTs(c.end)}</span> },
             { key: 'sc', header: 'Sc', render: (c) => `S${c.sceneNumber}` },
-            { key: 'who', header: 'Speaker', render: (c) => <span className="zh nowrap">{speaker(s.characters, c.characterId)}</span> },
+            { key: 'who', header: 'Speaker', render: (c) => <span className="zh nowrap">{c.speaker || (c.characterId ? speaker(s.characters, c.characterId) : '旁白 VO')}</span> },
             { key: 'line', header: 'Line', render: (c) => <div style={{ minWidth: 220 }}><div className="zh">{c.zh}</div><div className="small muted">{c.en}</div></div> },
             { key: 'v', header: 'Voice', render: (c) => (
               <select className="select sm" style={{ width: 120 }} aria-label="Voice status" value={vl(c.lineId).voiceStatus} onChange={(e) => s.upsertVoiceLine({ ...vl(c.lineId), voiceStatus: e.target.value as VoiceLine['voiceStatus'] })}>

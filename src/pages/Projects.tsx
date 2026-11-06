@@ -4,7 +4,6 @@ import { Pencil } from 'lucide-react';
 import type { Project } from '../../shared/types';
 import { useStore } from '../store/store';
 import { Card, Field, Modal, PageHead, Progress, StatusPill, fmtDate, fmtUSD } from '../components/ui';
-import { ARCS } from '../data/episodeOutline';
 
 export default function Projects() {
   const { project, episodes, updateProject, toast } = useStore();
@@ -30,7 +29,7 @@ export default function Projects() {
     ['Genre', project.genre], ['Format', project.format], ['Total episodes', String(project.totalEpisodes)],
     ['Episode duration', project.episodeDuration], ['Pilot target', project.pilotTarget], ['Language', project.language],
     ['Subtitles', project.subtitles], ['Visual style', project.visualStyle], ['Publishing platforms', project.platforms.join(' & ')],
-    ['Publishing frequency', project.frequency], ['First publish date', fmtDate(project.startDate)], ['Automation', project.automation], ['Monthly budget', fmtUSD(project.monthlyBudget)],
+    ['Publishing frequency', project.frequency], ['Project code', project.code], ['First publish date', `${fmtDate(project.startDate)} · ${project.publishTime} MYT`], ['Automation', project.automation], ['Monthly budget', fmtUSD(project.monthlyBudget)],
   ];
   const text = (k: keyof Project, label: string, full = false, area = false) => (
     <Field label={label} error={err[k]} className={full ? 'full' : ''}>
@@ -60,13 +59,13 @@ export default function Projects() {
           </Card>
           <Card title="Story arcs" flush>
             <div className="list">
-              {ARCS.map((a) => {
-                const inArc = episodes.filter((e) => e.number >= a.from && e.number <= a.to);
+              {[...new Set(episodes.map((e) => e.arc || '—'))].map((arc) => {
+                const inArc = episodes.filter((e) => (e.arc || '—') === arc);
                 const scripted = inArc.filter((e) => ['Approved', 'Complete'].includes(e.scriptStatus)).length;
                 return (
-                  <div className="list-item" key={a.name}>
+                  <div className="list-item" key={arc}>
                     <div className="grow">
-                      <div className="row between small"><span className="zh">{a.name}</span><span className="xs muted">EP{String(a.from).padStart(3, '0')}–{String(a.to).padStart(3, '0')}</span></div>
+                      <div className="row between small"><span className="zh">{arc}</span><span className="xs muted">{inArc[0]?.id}–{inArc.at(-1)?.id}</span></div>
                       <div className="mt8"><Progress value={(scripted / inArc.length) * 100} /></div>
                       <div className="xs faint mt8">{scripted}/{inArc.length} scripts approved</div>
                     </div>
@@ -98,6 +97,8 @@ export default function Projects() {
             {text('automation', 'Automation')}
             <Field label="Total episodes" error={err.totalEpisodes}>{(id) => <input id={id} type="number" min={1} className="input" value={edit.totalEpisodes} onChange={(e) => setEdit({ ...edit, totalEpisodes: Number(e.target.value) })} />}</Field>
             <Field label="Monthly budget (USD)" error={err.monthlyBudget}>{(id) => <input id={id} type="number" min={1} step="1" className="input" value={edit.monthlyBudget} onChange={(e) => setEdit({ ...edit, monthlyBudget: Number(e.target.value) })} />}</Field>
+            {text('code', 'Project code (workbook ID prefix)')}
+            {text('publishTime', 'Daily publish time (MYT, HH:mm)')}
             <Field label="First publish date">{(id) => <input id={id} type="date" className="input" value={edit.startDate} onChange={(e) => setEdit({ ...edit, startDate: e.target.value })} />}</Field>
           </div>
         )}

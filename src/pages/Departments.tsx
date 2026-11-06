@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Clapperboard, Film, Megaphone, Mic, PenSquare, Scissors, Video, type LucideIcon } from 'lucide-react';
-import type { ConnectionState, Episode, IntegrationStatus, DepartmentId } from '../../shared/types';
+import { publishSummary, type ConnectionState, type Episode, type IntegrationStatus, type DepartmentId } from '../../shared/types';
 import { useStore } from '../store/store';
 import { Banner, Empty, PageHead, StatusPill, relTime } from '../components/ui';
 
@@ -83,7 +83,7 @@ export default function Departments() {
                       {q.slice(0, 4).map((e) => (
                         <li key={e.id} className="row between small">
                           <Link to={`/episodes/${e.id}`} className="truncate">{e.id} <span className="zh muted">{e.titleZh}</span></Link>
-                          <StatusPill status={d.id === 'writer' ? e.scriptStatus : d.id === 'editor' ? e.editingStatus : d.id === 'video' ? e.videoStatus : d.id === 'distribution' ? e.publishingStatus : e.storyboardStatus} dot={false} />
+                          <StatusPill status={d.id === 'writer' ? e.scriptStatus : d.id === 'editor' ? e.editingStatus : d.id === 'video' ? e.videoStatus : d.id === 'distribution' ? publishSummary(e) : e.storyboardStatus} dot={false} />
                         </li>
                       ))}
                       {q.length > 4 && <li className="xs muted">+{q.length - 4} more</li>}

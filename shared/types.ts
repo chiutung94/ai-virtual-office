@@ -1,5 +1,6 @@
 // Domain model shared by the frontend and the server.
-// Field names map to worksheet columns via shared/sheetSchema.ts.
+// Mirrors the worksheets of "AI OFFICE – DRAMA PRODUCTION HQ"; see shared/workbook.ts
+// for the exact column mapping.
 
 export type ApprovalStage =
   | 'Draft'
@@ -23,30 +24,19 @@ export const PIPELINE: ApprovalStage[] = [
   'Published',
 ];
 
-export type WorkStatus =
-  | 'Not Started'
-  | 'In Progress'
-  | 'In Review'
-  | 'Changes Requested'
-  | 'Approved'
-  | 'Complete';
+export type WorkStatus = 'Not Started' | 'In Progress' | 'In Review' | 'Changes Requested' | 'Approved' | 'Complete';
+export const WORK_STATUSES: WorkStatus[] = ['Not Started', 'In Progress', 'In Review', 'Changes Requested', 'Approved', 'Complete'];
 
-export const WORK_STATUSES: WorkStatus[] = [
-  'Not Started',
-  'In Progress',
-  'In Review',
-  'Changes Requested',
-  'Approved',
-  'Complete',
-];
-
-export type PublishStatus = 'Not Scheduled' | 'Draft Prepared' | 'Scheduled' | 'Published' | 'Failed';
-export const PUBLISH_STATUSES: PublishStatus[] = ['Not Scheduled', 'Draft Prepared', 'Scheduled', 'Published', 'Failed'];
+/** Per-platform publishing state (EPISODES.instagram_status / tiktok_status, PUBLISHING.status). */
+export type PublishStatus = 'Draft' | 'Ready' | 'Scheduled' | 'Published' | 'Failed';
+export const PUBLISH_STATUSES: PublishStatus[] = ['Draft', 'Ready', 'Scheduled', 'Published', 'Failed'];
 
 export type Platform = 'Instagram' | 'TikTok';
+export const PLATFORMS: Platform[] = ['Instagram', 'TikTok'];
 
 export interface Project {
   id: string;
+  code: string; // DRAMA001 — prefix of workbook episode IDs
   titleZh: string;
   titleEn: string;
   genre: string;
@@ -61,26 +51,36 @@ export interface Project {
   frequency: string;
   automation: string;
   monthlyBudget: number;
-  startDate: string; // first publish date (ISO)
+  startDate: string; // planned first publish date (ISO)
+  publishTime: string; // HH:mm, Malaysia time
+  timezone: string;
   logline: string;
 }
 
 export interface Episode {
-  id: string; // EP001
+  id: string; // EP001 (workbook: DRAMA001-EP001)
   number: number;
   titleZh: string;
   titleEn: string;
-  synopsis: string;
+  synopsis: string; // workbook: logline
   arc: string;
+  cliffhanger: string;
   scriptStatus: WorkStatus;
   storyboardStatus: WorkStatus;
   videoStatus: WorkStatus;
   editingStatus: WorkStatus;
   approvalStatus: ApprovalStage;
-  publishingStatus: PublishStatus;
-  targetPublishDate: string; // ISO yyyy-mm-dd
+  instagramStatus: PublishStatus;
+  tiktokStatus: PublishStatus;
+  targetPublishDate: string; // yyyy-mm-dd
+  publishTime: string; // HH:mm MYT
   targetDuration: number; // seconds
-  notes?: string;
+  captionZh: string;
+  captionEn: string;
+  finalVideoUrl: string;
+  notes: string; // workbook: review_notes
+  owner: string;
+  blocker: string;
   updatedAt: string;
 }
 
@@ -90,36 +90,41 @@ export interface Character {
   nameEn: string;
   age: number;
   role: string;
-  appearance: string;
+  appearance: string; // appearance_lock
   wardrobeLock: string;
-  voice: string;
-  continuity: string;
-  imageUrl?: string;
+  voice: string; // voice_direction
+  continuity: string; // notes
+  imageUrl: string; // master_portrait_url
+  fullBodyUrl: string;
+  expressionSheetUrl: string;
 }
 
 export interface Location {
   id: string; // L01
   nameZh: string;
   nameEn: string;
-  description: string;
-  lighting: string;
+  description: string; // visual_description
   continuity: string;
-  imageUrl?: string;
+  imageUrl: string; // reference_image_url
 }
 
 export interface Asset {
-  id: string; // A001
-  type: 'Character Reference' | 'Location Reference' | 'Prop' | 'Music' | 'SFX' | 'Logo' | 'Other';
-  name: string;
-  linkedTo: string; // C01 / L02 / EP001
+  id: string;
+  episodeId: string;
+  type: string;
+  linkedTo: string; // character_or_scene
   url: string;
-  status: 'Needed' | 'In Progress' | 'Approved' | 'Locked';
+  version: string;
+  approved: boolean;
+  createdAt: string;
   notes: string;
 }
 
 export interface DialogueLine {
   id: string;
-  characterId: string;
+  characterId: string; // '' when the speaker is not in the Character Library (e.g. 秘书)
+  speaker?: string; // label as written in the script (e.g. 顾念) — preserved on export
+  speakerEn?: string;
   zh: string;
   en: string;
   emotion?: string;
@@ -128,6 +133,7 @@ export interface DialogueLine {
 export interface Scene {
   id: string;
   number: number;
+  title: string;
   locationId: string;
   timeOfDay: string;
   characterIds: string[];
@@ -146,38 +152,32 @@ export interface ScriptVersion {
   savedAt: string;
   savedBy: string;
   note: string;
-  source: 'manual' | 'ai' | 'demo-template';
+  source: 'manual' | 'ai' | 'demo-template' | 'workbook';
 }
 
+export type GenerationStatus = 'Prompt Draft' | 'Prompt Ready' | 'Queued' | 'Generating' | 'Generated' | 'Uploaded' | 'Failed' | 'Approved';
+export const GENERATION_STATUSES: GenerationStatus[] = ['Prompt Draft', 'Prompt Ready', 'Queued', 'Generating', 'Generated', 'Uploaded', 'Failed', 'Approved'];
+
+/** One generated clip = one SHOT_LIST row (prompt + Kling generation tracking). */
 export interface Shot {
-  id: string; // EP001-S01-SH01
+  id: string; // EP001-S01 (workbook: DRAMA001-EP001-S01)
   episodeId: string;
   sceneNumber: number;
   shotNumber: number;
-  shotType: string;
-  camera: string;
-  description: string;
-  visualPrompt: string;
   characterIds: string[];
-  duration: number;
-  storyboardStatus: WorkStatus;
-}
-
-export type GenerationStatus = 'Not Generated' | 'Queued' | 'Generating' | 'Generated' | 'Uploaded' | 'Failed' | 'Approved';
-
-export interface ProductionClip {
-  id: string;
-  episodeId: string;
-  sceneNumber: number;
+  referenceUrls: string[];
   prompt: string;
-  characterRefs: string[];
-  generationStatus: GenerationStatus;
-  clipUrl: string;
-  fileName?: string;
+  negativePrompt: string;
   duration: number;
-  credits: number;
+  aspectRatio: string;
+  resolution: string;
+  generationStatus: GenerationStatus;
+  klingTaskId: string;
+  videoUrl: string;
+  fileName?: string;
+  retryCount: number;
+  credits: number; // Kling units used (workbook column kling_units)
   notes: string;
-  updatedAt: string;
 }
 
 export interface VoiceLine {
@@ -194,32 +194,63 @@ export interface EditJob {
   renderStatus: 'Not Started' | 'Assembling' | 'Rendering' | 'Rendered' | 'Approved';
   renderUrl: string;
   notes: string;
-  clipOrder: string[];
+  clipOrder: string[]; // shot ids
 }
 
 export interface PublishEntry {
-  id: string;
+  id: string; // EP001-Instagram
   episodeId: string;
   platform: Platform;
   caption: string;
   hashtags: string;
-  scheduledDate: string;
+  coverUrl: string;
+  videoUrl: string;
+  scheduledAt: string; // 'YYYY-MM-DD HH:mm' Malaysia time
   status: PublishStatus;
-  postUrl: string;
+  platformPostId: string;
+  postUrl: string; // published_url
+  notes: string;
 }
 
 export interface AnalyticsEntry {
   id: string;
   episodeId: string;
   platform: Platform;
-  date: string;
-  views: number;
+  postedAt: string;
+  views: number; // views_24h
+  avgWatchSec: number;
+  completionRate: number; // 0-100
   likes: number;
   comments: number;
   shares: number;
-  completionRate: number; // 0-100
+  saves: number;
   followersGained: number;
+  notes: string;
   source: 'manual' | 'sheets' | 'api';
+}
+
+export interface Continuity {
+  episodeId: string;
+  timelineDate: string;
+  facts: string;
+  stateChanges: string;
+  propsCostume: string;
+  unresolved: string;
+  nextConstraints: string;
+}
+
+/** SCRIPT_RUNS — the Make.com AI script queue. */
+export type QueueStatus = 'HOLD' | 'GENERATE' | 'REVIEW' | 'BLOCKED' | 'DONE';
+export interface ScriptRun {
+  id: string; // RUN-EP001-001
+  episodeId: string;
+  queueStatus: QueueStatus;
+  model: string;
+  promptVersion: string;
+  outputJson: string;
+  createdAt: string;
+  errorMessage: string;
+  humanApproval: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 export interface ApprovalRecord {
@@ -234,6 +265,8 @@ export interface ApprovalRecord {
   timestamp: string;
 }
 
+export type DepartmentId = 'writer' | 'director' | 'storyboard' | 'video' | 'voice' | 'editor' | 'distribution';
+
 export interface ActivityItem {
   id: string;
   timestamp: string;
@@ -243,15 +276,6 @@ export interface ActivityItem {
   episodeId?: string;
   level: 'info' | 'success' | 'warning' | 'error';
 }
-
-export type DepartmentId =
-  | 'writer'
-  | 'director'
-  | 'storyboard'
-  | 'video'
-  | 'voice'
-  | 'editor'
-  | 'distribution';
 
 export interface BudgetLine {
   id: string;
@@ -290,3 +314,10 @@ export interface IntegrationStatus {
   lastTestedAt?: string;
   testable: boolean;
 }
+
+/** Episode-level publishing summary across platforms. */
+export const publishSummary = (e: Pick<Episode, 'instagramStatus' | 'tiktokStatus'>): PublishStatus => {
+  const order: PublishStatus[] = ['Failed', 'Draft', 'Ready', 'Scheduled', 'Published'];
+  if (e.instagramStatus === 'Failed' || e.tiktokStatus === 'Failed') return 'Failed';
+  return order[Math.min(order.indexOf(e.instagramStatus), order.indexOf(e.tiktokStatus))];
+};

@@ -34,7 +34,7 @@ export default function Dashboard() {
     ];
   }, [eps]);
 
-  const upcoming = eps.filter((e) => e.targetPublishDate >= today && e.approvalStatus !== 'Published').slice(0, 7);
+  const upcoming = eps.filter((e) => e.targetPublishDate && e.targetPublishDate >= today && e.approvalStatus !== 'Published').slice(0, 7);
   const actual = s.expenses.filter((x) => x.date.slice(0, 7) === today.slice(0, 7)).reduce((a, b) => a + b.amount, 0);
   const estimated = s.budgetLines.reduce((a, b) => a + b.estimatedMonthly, 0);
   const budget = s.project.monthlyBudget;
@@ -54,7 +54,9 @@ export default function Dashboard() {
       />
 
       {s.settings.dataSource === 'local-demo' && (
-        <div className="mb16"><Banner tone="warning">Local demo mode — sample production data stored in this browser. Connect Google Sheets in <Link to="/settings">Settings</Link> to use your workbook.</Banner></div>
+        <div className="mb16">{s.settings.lastImport
+          ? <Banner tone="info">Workbook data imported {fmtDate(s.settings.lastImport.slice(0, 10))} and stored in this browser. Changes are not in Google Sheets until you connect and push in <Link to="/settings">Settings</Link>.</Banner>
+          : <Banner tone="warning">Sample data in this browser. Import your workbook or connect Google Sheets in <Link to="/settings">Settings</Link>.</Banner>}</div>
       )}
 
       <div className="grid g6">
@@ -114,7 +116,7 @@ export default function Dashboard() {
                 </Link>
               ))}
             </div>
-          ) : <Empty title="Nothing scheduled" />}
+          ) : <Empty title="Nothing scheduled">Episodes have no publish dates yet. <Link to="/calendar">Schedule them in the calendar</Link>.</Empty>}
         </Card>
 
         <Card title="Pending tasks" sub={`${openTasks.length} open`} flush>

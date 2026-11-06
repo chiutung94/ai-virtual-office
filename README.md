@@ -73,13 +73,29 @@ src/components/ui.tsx   Card, DataTable (sort/paginate), Modal, ConfirmDialog, S
 | POST | `/api/ai/generate-script` | OpenAI JSON-mode scene generation |
 | POST | `/api/uploads` | Raw-body clip upload → `/uploads/<file>` |
 
-## Connecting Google Sheets & Make.com
-The full step-by-step guide is in the app at **Settings → Setup guide** (`/settings/setup`). In short:
-1. Upload `AI_Office_Drama_Production_HQ_v3.xlsx` to Drive and save it as a Google Sheet.
-2. Create a Google Cloud service account, enable the Sheets API, and share the sheet with the service account as Editor.
-3. Fill `GOOGLE_SHEETS_*` in `.env`, restart, then go to **Settings → Test connection**. The test lists any missing worksheets.
-4. **Pull** first, then check the "Unmapped (preserved)" column list. If your headers differ from the expected ones, add aliases in `shared/sheetSchema.ts`.
-5. Make.com: add a Custom Webhook URL to `MAKE_WEBHOOK_URL`, test it, and route by `event`. Filter on `payload.approved = true` for anything related to publishing.
+## Your workbook: AI OFFICE – DRAMA PRODUCTION HQ
 
-> The workbook itself was not available while building this. Column names are expected
-> defaults with tolerant matching. Verify them against your sheet on the first pull.
+The data layer (`shared/workbook.ts`) matches the real workbook column by column. It was verified by
+importing the workbook and exporting it again: about 1,900 cells, with 0 differences.
+
+| Worksheet | Key | Notes |
+|---|---|---|
+| EPISODES | `episode_id` | IDs are `DRAMA001-EP001` in the sheet and `EP001` in the app. `script_status` uses the START_HERE stage codes (IDEA, SCRIPT_DRAFT, … PUBLISHED, BLOCKED). |
+| PRODUCTION | `episode_id` | Per-episode department board. `approval_status` keeps the exact app stage. `image_status`, `voice_status` and `qa_status` are left untouched. |
+| SCRIPTS | `episode_id` + `scene_no` | Dialogue is stored as `顾念：台词\n…`. Speakers outside the cast (e.g. 秘书) are preserved. Scenes deleted in the app are cleared on push. |
+| SHOT_LIST | `shot_id` | Prompts plus Kling tracking (`generation_status`, `kling_task_id`, `video_url`, `retry_count`). Adds one column, `kling_units`. |
+| PUBLISHING | `episode_id` + `platform` | `scheduled_at_myt` is Malaysia time. Posting stays manual. |
+| ANALYTICS | `episode_id` + `platform` + `posted_at` | |
+| CHARACTERS, LOCATIONS, ASSETS, CONTINUITY | id / `episode_id` | |
+| SCRIPT_RUNS | `run_id` | The Make.com Scenario 01 queue. Script Studio sets `queue_status=GENERATE`; Make writes `output_json` and sets `REVIEW`; a human accepts or rejects. |
+| START_HERE, MAKE_SETUP | — | Reference only, never written. |
+
+**Two ways to load it:**
+1. **Import .xlsx (no setup).** In Google Sheets choose File → Download → .xlsx, then go to Settings → *Import workbook*. The file is parsed in the browser and never uploaded.
+2. **Live Google Sheets sync.** Use a service account and the Pull/Push buttons in Settings. Writes use `RAW` values (no formula evaluation) and only touch the columns listed above.
+
+> This repository is public, so it contains no script content. Real data lives in your workbook
+> and your browser.
+
+## Connecting Google Sheets & Make.com
+The full step-by-step guide is in the app at **Settings → Setup guide** (`/settings/setup`).

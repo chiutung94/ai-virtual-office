@@ -4,6 +4,7 @@ export interface Cue {
   lineId: string;
   sceneNumber: number;
   characterId: string;
+  speaker: string;
   start: number; // seconds
   end: number;
   zh: string;
@@ -21,7 +22,7 @@ export function buildCues(scenes: Scene[]): Cue[] {
       const slot = (sc.duration - lead) / n;
       sc.dialogue.forEach((d, i) => {
         const start = t + lead + i * slot;
-        cues.push({ lineId: d.id, sceneNumber: sc.number, characterId: d.characterId, start, end: start + slot * 0.92, zh: d.zh, en: d.en });
+        cues.push({ lineId: d.id, sceneNumber: sc.number, characterId: d.characterId, speaker: d.speaker ?? '', start, end: start + slot * 0.92, zh: d.zh, en: d.en });
       });
     }
     t += sc.duration;

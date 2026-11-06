@@ -4,7 +4,7 @@ import type { Character } from '../../shared/types';
 import { useStore } from '../store/store';
 import { Card, ConfirmDialog, Empty, Field, Modal, PageHead, SearchInput, type ConfirmOpts } from '../components/ui';
 
-const blank = (n: number): Character => ({ id: `C${String(n).padStart(2, '0')}`, nameZh: '', nameEn: '', age: 30, role: '', appearance: '', wardrobeLock: '', voice: '', continuity: '', imageUrl: '' });
+const blank = (n: number): Character => ({ id: `C${String(n).padStart(2, '0')}`, nameZh: '', nameEn: '', age: 30, role: '', appearance: '', wardrobeLock: '', voice: '', continuity: '', imageUrl: '', fullBodyUrl: '', expressionSheetUrl: '' });
 
 export default function Characters() {
   const { characters, upsert, remove, toast, scriptVersions } = useStore();
@@ -27,7 +27,7 @@ export default function Characters() {
     if (edit.isNew && characters.some((x) => x.id === c.id)) e.id = 'ID already exists';
     if (!c.nameZh.trim()) e.nameZh = 'Required';
     if (!c.nameEn.trim()) e.nameEn = 'Required';
-    if (c.imageUrl && !/^https?:\/\/|^\/uploads\//.test(c.imageUrl)) e.imageUrl = 'Must be an http(s) URL';
+    for (const k of ['imageUrl', 'fullBodyUrl', 'expressionSheetUrl'] as const) if (c[k] && !/^(https?:\/\/|\/uploads\/)/.test(c[k])) e[k] = 'Must be an http(s) URL';
     setErr(e);
     if (Object.keys(e).length) return;
     upsert('characters', c);
@@ -66,7 +66,7 @@ export default function Characters() {
                 </div>
               </div>
               <dl className="col mt16" style={{ gap: 10, margin: '16px 0 0' }}>
-                {([['Appearance', c.appearance], ['Wardrobe lock', c.wardrobeLock], ['Voice', c.voice], ['Continuity notes', c.continuity]] as const).map(([k, v]) => (
+                {([['Appearance lock', c.appearance], ['Wardrobe lock', c.wardrobeLock], ['Voice direction', c.voice], ['Notes', c.continuity]] as const).map(([k, v]) => (
                   <div key={k}><dt className="label">{k}</dt><dd className="small" style={{ margin: '2px 0 0' }}>{v || <span className="faint">—</span>}</dd></div>
                 ))}
               </dl>
@@ -99,7 +99,9 @@ export default function Characters() {
             {F('wardrobeLock', 'Wardrobe lock', true)}
             {F('voice', 'Voice description', true)}
             {F('continuity', 'Continuity notes', true, true)}
-            {F('imageUrl', 'Reference image URL', false, true)}
+            {F('imageUrl', 'Master portrait URL (identity anchor)', false, true)}
+            {F('fullBodyUrl', 'Full-body reference URL')}
+            {F('expressionSheetUrl', 'Expression sheet URL')}
           </div>
         )}
       </Modal>

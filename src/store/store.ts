@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
-  ActivityItem, AnalyticsEntry, ApprovalRecord, Asset, BudgetLine, Character, EditJob, Episode, Expense,
-  IntegrationStatus, Location, ProductionClip, Project, PublishEntry, Scene, ScriptVersion, Shot, Task, VoiceLine,
+  ActivityItem, AnalyticsEntry, ApprovalRecord, Asset, BudgetLine, Character, Continuity, EditJob, Episode, Expense,
+  IntegrationStatus, Location, Project, PublishEntry, Scene, ScriptRun, ScriptVersion, Shot, Task, VoiceLine,
 } from '../../shared/types';
+import type { WorkbookState } from '../../shared/workbook';
 import * as seed from '../data/seed';
 import { actionsFor, sideEffects, type WfAction } from '../lib/workflow';
 import { api } from '../lib/api';
@@ -18,7 +19,8 @@ export interface Collections {
   assets: Asset[];
   scriptVersions: ScriptVersion[];
   shots: Shot[];
-  clips: ProductionClip[];
+  continuity: Continuity[];
+  scriptRuns: ScriptRun[];
   voiceLines: VoiceLine[];
   editJobs: EditJob[];
   publishing: PublishEntry[];
@@ -29,7 +31,7 @@ export interface Collections {
   expenses: Expense[];
   tasks: Task[];
 }
-type KeyedCollection = Exclude<keyof Collections, 'editJobs' | 'voiceLines'>;
+type KeyedCollection = Exclude<keyof Collections, 'editJobs' | 'voiceLines' | 'continuity'>;
 
 export interface Toast {
   id: string;
@@ -43,6 +45,7 @@ export interface Settings {
   autoNotifyMake: boolean;
   lastPull?: string;
   lastPush?: string;
+  lastImport?: string;
 }
 
 interface State extends Collections {
@@ -65,6 +68,8 @@ interface State extends Collections {
   replaceCollection: <K extends keyof Collections>(col: K, items: Collections[K]) => void;
   upsertEditJob: (job: EditJob) => void;
   upsertVoiceLine: (v: VoiceLine) => void;
+  upsertContinuity: (c: Continuity) => void;
+  applyWorkbookPatch: (p: Partial<WorkbookState>) => void;
   transition: (episodeId: string, action: WfAction, comment: string) => { ok: boolean; error?: string };
   saveScript: (episodeId: string, scenes: Scene[], note: string, source: ScriptVersion['source']) => ScriptVersion;
   refreshIntegrations: () => Promise<void>;
@@ -81,7 +86,8 @@ const seedCollections = (): Collections & { project: Project } => ({
   assets: seed.assets,
   scriptVersions: seed.scriptVersions,
   shots: seed.shots,
-  clips: seed.clips,
+  continuity: seed.continuity,
+  scriptRuns: seed.scriptRuns,
   voiceLines: [],
   editJobs: seed.editJobs,
   publishing: seed.publishing,
@@ -139,6 +145,12 @@ export const useStore = create<State>()(
           voiceLines: s.voiceLines.some((x) => x.id === v.id) ? s.voiceLines.map((x) => (x.id === v.id ? v : x)) : [...s.voiceLines, v],
         })),
 
+      upsertContinuity: (c) =>
+        set((s) => ({
+          continuity: s.continuity.some((x) => x.episodeId === c.episodeId) ? s.continuity.map((x) => (x.episodeId === c.episodeId ? c : x)) : [...s.continuity, c],
+        })),
+      applyWorkbookPatch: (p) => set(p as Partial<State>),
+
       transition: (episodeId, action, comment) => {
         const s = get();
         const ep = s.episodes.find((e) => e.id === episodeId);
@@ -154,7 +166,14 @@ export const useStore = create<State>()(
           id: uid('ap'), episodeId, subject: def.subject, action: def.record, from: ep.approvalStatus, to: def.to,
           reviewer: s.settings.reviewerName, comment: comment.trim(), timestamp: now(),
         };
-        s.updateEpisode(episodeId, { approvalStatus: def.to, ...sideEffects(ep, ep.approvalStatus, action) });
+        const extra: Partial<Episode> = {};
+        if (action === 'publish') {
+          const posted = s.publishing.filter((p) => p.episodeId === episodeId && p.postUrl.trim());
+          if (posted.some((p) => p.platform === 'Instagram')) extra.instagramStatus = 'Published';
+          if (posted.some((p) => p.platform === 'TikTok')) extra.tiktokStatus = 'Published';
+          set((st) => ({ publishing: st.publishing.map((p) => (p.episodeId === episodeId && p.postUrl.trim() ? { ...p, status: 'Published' } : p)) }));
+        }
+        s.updateEpisode(episodeId, { approvalStatus: def.to, ...sideEffects(ep, ep.approvalStatus, action), ...extra });
         set((st) => ({ approvals: [record, ...st.approvals] }));
         s.log({
           actor: s.settings.reviewerName, episodeId,
@@ -207,7 +226,9 @@ export const useStore = create<State>()(
     }),
     {
       name: 'avo-drama-hq',
-      version: 1,
+      version: seed.SEED_VERSION,
+      // Data model changed to match the real workbook — older browser data is replaced by the new sample.
+      migrate: (persisted, version) => (version < seed.SEED_VERSION ? ({ ...seedCollections(), seedVersion: seed.SEED_VERSION } as unknown as State) : (persisted as State)),
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => {
         const { integrations: _i, backendOnline: _b, toasts: _t, ...rest } = s;

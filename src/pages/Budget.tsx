@@ -17,7 +17,7 @@ export default function Budget() {
   const monthExp = s.expenses.filter((e) => e.date.startsWith(month));
   const actual = monthExp.reduce((a, b) => a + b.amount, 0);
   const estimated = s.budgetLines.reduce((a, b) => a + b.estimatedMonthly, 0);
-  const credits = s.clips.reduce((a, b) => a + (b.credits || 0), 0);
+  const credits = s.shots.reduce((a, b) => a + (b.credits || 0), 0);
   const aiRuns = s.scriptVersions.filter((v) => v.source === 'ai').length;
 
   const chart = useMemo(() => SERVICES.map((sv) => ({

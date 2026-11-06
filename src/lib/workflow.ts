@@ -64,7 +64,7 @@ export function sideEffects(ep: Episode, from: ApprovalStage, a: WfAction): Part
     case 'approve':
       return from === 'Under Review'
         ? { scriptStatus: 'Approved' }
-        : { videoStatus: 'Approved', editingStatus: 'Approved', publishingStatus: ep.publishingStatus === 'Not Scheduled' ? 'Draft Prepared' : ep.publishingStatus };
+        : { videoStatus: 'Approved', editingStatus: 'Approved', instagramStatus: ep.instagramStatus === 'Draft' ? 'Ready' : ep.instagramStatus, tiktokStatus: ep.tiktokStatus === 'Draft' ? 'Ready' : ep.tiktokStatus };
     case 'requestChanges':
       return from === 'Under Review' ? { scriptStatus: 'Changes Requested' } : { editingStatus: 'Changes Requested' };
     case 'startProduction':
@@ -72,7 +72,7 @@ export function sideEffects(ep: Episode, from: ApprovalStage, a: WfAction): Part
     case 'submitFinal':
       return { videoStatus: ep.videoStatus === 'Approved' ? 'Approved' : 'Complete', editingStatus: 'In Review' };
     case 'publish':
-      return { publishingStatus: 'Published' };
+      return {};
     case 'reopen':
       return { scriptStatus: 'In Progress' };
     default:

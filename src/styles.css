@@ -255,9 +255,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .skeleton { background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; height: 14px; }
 @keyframes shimmer { to { background-position: -200% 0; } }
-.progress { height: 6px; background: var(--surface-3); border-radius: 6px; overflow: hidden; }
-.progress > div { height: 100%; background: var(--accent); border-radius: 6px; transition: width .3s; }
-.progress.success > div { background: var(--success); } .progress.warning > div { background: var(--warning); } .progress.danger > div { background: var(--danger); }
+.progressbar { height: 6px; background: var(--surface-3); border-radius: 6px; overflow: hidden; }
+.progressbar > div { height: 100%; background: var(--accent); border-radius: 6px; transition: width .3s; }
+.progressbar.success > div { background: var(--success); } .progressbar.warning > div { background: var(--warning); } .progressbar.danger > div { background: var(--danger); }
 .list { display: flex; flex-direction: column; }
 .list-item { display: flex; gap: 12px; align-items: flex-start; padding: 11px 18px; border-bottom: 1px solid var(--border); }
 .list-item:last-child { border-bottom: none; }

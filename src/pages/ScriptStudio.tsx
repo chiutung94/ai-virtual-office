@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, History, Lock, Plus, Save, Send, Sparkles, Trash2, Wand2 } from 'lucide-react';
-import type { DialogueLine, Scene } from '../../shared/types';
+import type { DialogueLine, Scene, ScriptRun } from '../../shared/types';
+import { scenesFromAiJson } from '../../shared/workbook';
+import { pushSheet } from '../lib/sync';
 import { latestScript, uid, useStore } from '../store/store';
 import { api } from '../lib/api';
 import { Banner, Card, ConfirmDialog, Field, PageHead, StatusPill, fmtDateTime, type ConfirmOpts } from '../components/ui';
 import { EpisodePicker } from '../components/shared';
 
-const blankScene = (n: number): Scene => ({ id: uid('sc'), number: n, locationId: 'L01', timeOfDay: 'Night', characterIds: [], visualAction: '', camera: '', sfx: '', duration: 15, dialogue: [] });
+const blankScene = (n: number): Scene => ({ id: uid('sc'), number: n, title: '', locationId: 'L01', timeOfDay: 'Night', characterIds: [], visualAction: '', camera: '', sfx: '', duration: 15, dialogue: [] });
 
 /** Clearly-labelled offline template so the workflow can be exercised without an API key. */
 function demoTemplate(epTitle: string, synopsis: string): Scene[] {
@@ -99,12 +101,10 @@ export default function ScriptStudio() {
       const r = await api.generateScript({
         episode: ep, project: s.project, characters: s.characters.map(({ id, nameZh, nameEn, role, voice, age }) => ({ id, nameZh, nameEn, role, voice, age })),
         locations: s.locations.map(({ id, nameZh, nameEn }) => ({ id, nameZh, nameEn })),
-        previousSynopses: s.episodes.slice(Math.max(0, idx - 3), idx).map((e) => `${e.id}: ${e.synopsis}`),
+        previousSynopses: s.episodes.slice(Math.max(0, idx - 3), idx).map((e) => `${e.id}: ${e.synopsis} — cliffhanger: ${e.cliffhanger}`),
+        continuity: s.continuity.find((c) => c.episodeId === s.episodes[idx - 1]?.id) ?? null,
       });
-      const sc = (r.scenes as Partial<Scene>[]).map((x, i) => ({
-        ...blankScene(i + 1), ...x, id: uid('sc'), number: i + 1,
-        dialogue: (x.dialogue ?? []).map((d) => ({ ...d, id: uid('dl') })) as DialogueLine[],
-      }));
+      const sc = scenesFromAiJson(JSON.stringify({ scenes: r.scenes }), s.characters, uid);
       setScenes(sc); setDirty(true); setNote(`AI draft (${r.model})`);
       const v = s.saveScript(ep.id, sc, `AI draft (${r.model}) — unreviewed`, 'ai');
       setBaseVersion(v.version); setDirty(false);
@@ -174,9 +174,10 @@ export default function ScriptStudio() {
                 </div>
               </div>
               <div className="scene-body">
+                <Field label="Scene title">{(fid) => <input id={fid} className="input zh" value={sc.title} placeholder="e.g. 归来" onChange={(e) => patchScene(i, { title: e.target.value })} />}</Field>
                 <div className="grid g4">
                   <Field label="Location">{(fid) => <select id={fid} className="select" value={sc.locationId} onChange={(e) => patchScene(i, { locationId: e.target.value })}>{s.locations.map((l) => <option key={l.id} value={l.id}>{l.id} {l.nameZh}</option>)}</select>}</Field>
-                  <Field label="Time of day">{(fid) => <select id={fid} className="select" value={sc.timeOfDay} onChange={(e) => patchScene(i, { timeOfDay: e.target.value })}>{['Day', 'Night', 'Dusk', 'Dawn', 'Flashback'].map((t) => <option key={t}>{t}</option>)}</select>}</Field>
+                  <Field label="Time of day">{(fid) => <select id={fid} className="select" value={sc.timeOfDay} onChange={(e) => patchScene(i, { timeOfDay: e.target.value })}><option value="">—</option>{['Day', 'Night', 'Dusk', 'Dawn', 'Flashback'].map((t) => <option key={t}>{t}</option>)}</select>}</Field>
                   <Field label="Duration (s)">{(fid) => <input id={fid} type="number" min={1} max={60} className="input" value={sc.duration} onChange={(e) => patchScene(i, { duration: Number(e.target.value) })} />}</Field>
                   <div className="field"><span className="label">Characters</span>
                     <div className="row wrap gap4">{s.characters.map((c) => (
@@ -191,14 +192,18 @@ export default function ScriptStudio() {
                 </div>
                 <div>
                   <div className="row between"><span className="label">Dialogue — Mandarin / English</span>
-                    <button className="btn sm" onClick={() => mutate((x) => { x[i].dialogue.push({ id: uid('dl'), characterId: sc.characterIds[0] ?? 'C01', zh: '', en: '' }); return x; })}><Plus size={12} />Line</button>
+                    <button className="btn sm" onClick={() => mutate((x) => { x[i].dialogue.push({ id: uid('dl'), characterId: sc.characterIds[0] ?? 'C01', speaker: '', zh: '', en: '' }); return x; })}><Plus size={12} />Line</button>
                   </div>
                   <div className="col mt8">
                     {sc.dialogue.map((d, j) => (
                       <div key={d.id} className="dl-row">
-                        <select className="select sm" aria-label="Speaker" value={d.characterId} onChange={(e) => patchLine(i, j, { characterId: e.target.value })}>
-                          {s.characters.map((c) => <option key={c.id} value={c.id}>{c.id} {c.nameZh.split(' / ')[0]}</option>)}
-                        </select>
+                        <div className="col gap4">
+                          <select className="select sm" aria-label="Speaker" value={d.characterId} onChange={(e) => patchLine(i, j, { characterId: e.target.value })}>
+                            {s.characters.map((c) => <option key={c.id} value={c.id}>{c.id} {c.nameZh.split(' / ')[0]}</option>)}
+                            <option value="">Other / voice-over</option>
+                          </select>
+                          <input className="input sm zh" aria-label="Speaker label as written" placeholder={d.characterId ? 'Label (e.g. 顾念)' : 'Speaker (e.g. 秘书)'} value={d.speaker ?? ''} onChange={(e) => patchLine(i, j, { speaker: e.target.value })} />
+                        </div>
                         <textarea className="textarea zh" style={{ minHeight: 38 }} aria-label="Mandarin line" placeholder="中文台词" value={d.zh} onChange={(e) => patchLine(i, j, { zh: e.target.value })} />
                         <textarea className="textarea" style={{ minHeight: 38 }} aria-label="English translation" placeholder="English translation" value={d.en} onChange={(e) => patchLine(i, j, { en: e.target.value })} />
                         <button className="btn sm icon ghost" aria-label="Remove line" onClick={() => mutate((x) => { x[i].dialogue.splice(j, 1); return x; })}><Trash2 size={12} /></button>
@@ -213,7 +218,9 @@ export default function ScriptStudio() {
           {!locked && <button className="btn mt16" onClick={() => mutate((x) => [...x, blankScene(x.length + 1)])}><Plus size={14} />Add scene</button>}
         </div>
 
-        <Card title={<span className="row"><History size={14} />Version history</span>} sub={`${versions.length} versions · SCRIPT_RUNS`} flush>
+        <div className="col gap16">
+        <AiQueue episodeId={ep.id} locked={locked} onLoad={(sc, n) => { setScenes(sc); setDirty(true); setNote(n); }} />
+        <Card title={<span className="row"><History size={14} />Version history</span>} sub={`${versions.length} versions (stored in the app)`} flush>
           {versions.length ? (
             <div className="list">
               {versions.map((v) => (
@@ -222,7 +229,7 @@ export default function ScriptStudio() {
                   <div className="grow">
                     <div className="small">{v.note || '—'}</div>
                     <div className="xs muted">{v.savedBy} · {fmtDateTime(v.savedAt)} · {v.scenes.length} scenes · {v.scenes.reduce((a, b) => a + b.duration, 0)}s</div>
-                    {v.source !== 'manual' && <span className={`pill ${v.source === 'ai' ? 'review' : 'warning'} mt8`}>{v.source === 'ai' ? 'AI generated' : 'Demo template'}</span>}
+                    {v.source !== 'manual' && <span className={`pill ${v.source === 'ai' ? 'review' : v.source === 'workbook' ? 'progress' : 'warning'} mt8`}>{v.source === 'ai' ? 'AI generated' : v.source === 'workbook' ? 'From workbook' : 'Sample / template'}</span>}
                   </div>
                   <button className="btn sm" disabled={locked || v.version === baseVersion && !dirty} onClick={() => setConfirm({
                     title: `Restore v${v.version}?`, confirmLabel: 'Load into editor',
@@ -234,8 +241,67 @@ export default function ScriptStudio() {
             </div>
           ) : <div className="empty small">No saved versions</div>}
         </Card>
+        </div>
       </div>
       <ConfirmDialog opts={confirm} onClose={() => setConfirm(null)} />
     </>
+  );
+}
+
+/** SCRIPT_RUNS queue — Make.com Scenario 01 generates; a human approves before it becomes the script. */
+function AiQueue({ episodeId, locked, onLoad }: { episodeId: string; locked: boolean; onLoad: (scenes: Scene[], note: string) => void }) {
+  const s = useStore();
+  const runs = s.scriptRuns.filter((r) => r.episodeId === episodeId).sort((a, b) => b.id.localeCompare(a.id));
+  const run = runs[0];
+  const sheetsOk = s.integrations?.find((i) => i.id === 'sheets')?.state === 'Connected';
+  const [busy, setBusy] = useState(false);
+
+  const save = async (r: ScriptRun, msg: string) => {
+    s.upsert('scriptRuns', r);
+    if (sheetsOk) {
+      setBusy(true);
+      try { await pushSheet('SCRIPT_RUNS'); s.toast('success', `${msg} — synced to Google Sheets`); }
+      catch (e) { s.toast('error', `${msg} locally, but the sync failed: ${(e as Error).message}`); }
+      finally { setBusy(false); }
+    } else s.toast('info', `${msg} in this browser. Push SCRIPT_RUNS from Settings (or edit the workbook) for Make.com to see it.`);
+  };
+  const queue = () => {
+    const n = runs.length + 1;
+    const base: ScriptRun = run && run.humanApproval === 'PENDING' && run.queueStatus !== 'REVIEW'
+      ? run
+      : { id: `RUN-${episodeId}-${String(n).padStart(3, '0')}`, episodeId, queueStatus: 'HOLD', model: run?.model || 'gpt-4o-mini', promptVersion: run?.promptVersion || 'v1', outputJson: '', createdAt: '', errorMessage: '', humanApproval: 'PENDING' };
+    void save({ ...base, queueStatus: 'GENERATE', errorMessage: '' }, `${base.id} queued (GENERATE)`);
+    s.log({ actor: s.settings.reviewerName, department: 'writer', episodeId, message: `${episodeId}: AI script run queued for Make.com`, level: 'info' });
+  };
+  const load = () => {
+    try { onLoad(scenesFromAiJson(run.outputJson, s.characters, uid), `AI draft ${run.id} (${run.model}) — review`); s.toast('success', 'AI output loaded into the editor. Review it, then Save Draft.'); }
+    catch (e) { s.toast('error', `Could not read output_json: ${(e as Error).message}`); }
+  };
+  const decide = (ok: boolean) => {
+    void save({ ...run, humanApproval: ok ? 'APPROVED' : 'REJECTED', queueStatus: ok ? 'DONE' : 'HOLD' }, `${run.id} ${ok ? 'approved' : 'rejected'}`);
+    if (ok) { try { s.saveScript(episodeId, scenesFromAiJson(run.outputJson, s.characters, uid), `AI draft ${run.id} accepted`, 'ai'); } catch { /* already reported on load */ } }
+  };
+
+  return (
+    <Card title="AI script queue" sub="Make.com Scenario 01 · SCRIPT_RUNS">
+      {run ? (
+        <div className="col">
+          <div className="row wrap"><span className="mono small">{run.id}</span><StatusPill status={run.queueStatus === 'REVIEW' ? 'In Review' : run.queueStatus === 'BLOCKED' ? 'Failed' : run.queueStatus === 'DONE' ? 'Complete' : run.queueStatus === 'GENERATE' ? 'Queued' : 'Not Started'} /><span className="tag">{run.queueStatus}</span></div>
+          <div className="xs muted">Model {run.model || '—'} · prompt {run.promptVersion || '—'} · human approval {run.humanApproval}{run.createdAt && ` · ${run.createdAt}`}</div>
+          {run.errorMessage && <Banner tone="danger">{run.errorMessage}</Banner>}
+          {run.queueStatus === 'GENERATE' && <div className="xs faint">Waiting for Make.com to pick this up (daily at 06:00 MYT, or “Run once”).</div>}
+          {run.queueStatus === 'REVIEW' && run.outputJson && (
+            <div className="row wrap">
+              <button className="btn sm" onClick={load} disabled={locked}>Load into editor</button>
+              <button className="btn sm success" onClick={() => decide(true)} disabled={locked || busy}>Accept as new version</button>
+              <button className="btn sm danger" onClick={() => decide(false)} disabled={busy}>Reject output</button>
+            </div>
+          )}
+        </div>
+      ) : <div className="small muted">No AI runs for this episode yet.</div>}
+      <div className="divider" />
+      <button className="btn sm" onClick={queue} disabled={busy || locked || run?.queueStatus === 'GENERATE' || run?.queueStatus === 'REVIEW'}>{busy ? <span className="spinner" /> : <Sparkles size={13} />}Queue for AI generation</button>
+      <div className="xs faint mt8">Sets queue_status = GENERATE. Your Make scenario calls OpenAI, writes output_json and sets REVIEW. Nothing becomes the script until a person accepts it here.</div>
+    </Card>
   );
 }

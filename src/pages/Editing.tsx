@@ -13,22 +13,22 @@ export default function Editing() {
   const s = useStore();
   const [epId, setEp] = useEpisodeParam();
   const ep = s.episodes.find((e) => e.id === epId);
-  const clips = s.clips.filter((c) => c.episodeId === epId);
-  const job: EditJob = s.editJobs.find((j) => j.episodeId === epId) ?? { episodeId: epId, music: '', subtitlesBurned: false, renderStatus: 'Not Started', renderUrl: '', notes: '', clipOrder: clips.sort((a, b) => a.sceneNumber - b.sceneNumber).map((c) => c.id) };
+  const clips = s.shots.filter((c) => c.episodeId === epId);
+  const job: EditJob = s.editJobs.find((j) => j.episodeId === epId) ?? { episodeId: epId, music: '', subtitlesBurned: false, renderStatus: 'Not Started', renderUrl: '', notes: '', clipOrder: clips.sort((a, b) => a.sceneNumber - b.sceneNumber || a.shotNumber - b.shotNumber).map((c) => c.id) };
   const ordered = useMemo(() => {
-    const ids = [...job.clipOrder.filter((id) => clips.some((c) => c.id === id)), ...clips.filter((c) => !job.clipOrder.includes(c.id)).sort((a, b) => a.sceneNumber - b.sceneNumber).map((c) => c.id)];
+    const ids = [...job.clipOrder.filter((id) => clips.some((c) => c.id === id)), ...clips.filter((c) => !job.clipOrder.includes(c.id)).sort((a, b) => a.sceneNumber - b.sceneNumber || a.shotNumber - b.shotNumber).map((c) => c.id)];
     return ids.map((id) => clips.find((c) => c.id === id)!);
   }, [job.clipOrder, clips]);
   const total = ordered.reduce((a, b) => a + b.duration, 0);
   const shotstack = s.integrations?.find((i) => i.id === 'shotstack');
   const update = (p: Partial<EditJob>) => s.upsertEditJob({ ...job, clipOrder: ordered.map((c) => c.id), ...p });
   const move = (i: number, d: -1 | 1) => { const ids = ordered.map((c) => c.id); [ids[i], ids[i + d]] = [ids[i + d], ids[i]]; update({ clipOrder: ids }); };
-  const missing = ordered.filter((c) => !c.clipUrl || c.clipUrl.startsWith('blob:'));
+  const missing = ordered.filter((c) => !c.videoUrl || c.videoUrl.startsWith('blob:'));
 
   const exportShotstack = () => {
     const script = latestScript(s.scriptVersions, epId);
     let t = 0;
-    const videoClips = ordered.map((c) => { const clip = { asset: { type: 'video', src: c.clipUrl.startsWith('/') ? `${location.origin}${c.clipUrl}` : c.clipUrl || 'REPLACE_WITH_CLIP_URL' }, start: t, length: c.duration, fit: 'cover' }; t += c.duration; return clip; });
+    const videoClips = ordered.map((c) => { const clip = { asset: { type: 'video', src: c.videoUrl.startsWith('/') ? `${location.origin}${c.videoUrl}` : c.videoUrl || 'REPLACE_WITH_CLIP_URL' }, start: t, length: c.duration, fit: 'cover' }; t += c.duration; return clip; });
     const subs = job.subtitlesBurned && script ? buildCues(script.scenes).map((q) => ({
       asset: { type: 'title', text: `${q.zh}\n${q.en}`, style: 'subtitle', size: 'small', position: 'bottom' }, start: Number(q.start.toFixed(2)), length: Number((q.end - q.start).toFixed(2)),
     })) : [];
@@ -57,14 +57,14 @@ export default function Editing() {
           {ordered.length ? (
             <>
               <div style={{ display: 'flex', gap: 2, padding: '14px 18px' }} aria-hidden>
-                {ordered.map((c) => <div key={c.id} title={`S${c.sceneNumber} · ${c.duration}s`} style={{ flex: c.duration, height: 34, borderRadius: 4, background: c.clipUrl ? 'var(--accent-soft)' : 'var(--surface-3)', border: `1px solid ${c.clipUrl ? 'rgba(139,124,246,.4)' : 'var(--border-strong)'}`, display: 'grid', placeItems: 'center', fontSize: 11 }}>S{c.sceneNumber}</div>)}
+                {ordered.map((c) => <div key={c.id} title={`S${c.sceneNumber} · ${c.duration}s`} style={{ flex: c.duration, height: 34, borderRadius: 4, background: c.videoUrl ? 'var(--accent-soft)' : 'var(--surface-3)', border: `1px solid ${c.videoUrl ? 'rgba(139,124,246,.4)' : 'var(--border-strong)'}`, display: 'grid', placeItems: 'center', fontSize: 11 }}>S{c.sceneNumber}</div>)}
               </div>
               <div className="list">
                 {ordered.map((c, i) => (
                   <div key={c.id} className="list-item">
                     <span className="mono small" style={{ width: 28 }}>{i + 1}</span>
                     <Film size={15} className="muted" />
-                    <div className="grow"><div className="small">Scene {c.sceneNumber} · {c.duration}s</div><div className="xs muted truncate">{c.fileName ?? (c.clipUrl || 'No clip attached')}</div></div>
+                    <div className="grow"><div className="small">{c.id.replace(`${epId}-`, '')} · scene {c.sceneNumber} · {c.duration}s</div><div className="xs muted truncate">{c.fileName ?? (c.videoUrl || 'No clip attached')}</div></div>
                     <StatusPill status={c.generationStatus} />
                     <button className="btn sm icon ghost" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp size={13} /></button>
                     <button className="btn sm icon ghost" aria-label="Move down" disabled={i === ordered.length - 1} onClick={() => move(i, 1)}><ArrowDown size={13} /></button>
@@ -79,9 +79,9 @@ export default function Editing() {
         <Card title="Edit settings">
           <div className="col gap16">
             <Field label="Render status">{(id) => <select id={id} className="select" value={job.renderStatus} onChange={(e) => { update({ renderStatus: e.target.value as EditJob['renderStatus'] }); s.toast('success', 'Render status updated'); }}>{RENDER.map((r) => <option key={r}>{r}</option>)}</select>}</Field>
-            <Field label="Music">{(id) => <select id={id} className="select" value={job.music} onChange={(e) => update({ music: e.target.value })}><option value="">None</option>{s.assets.filter((a) => a.type === 'Music').map((a) => <option key={a.id} value={`${a.id} ${a.name}`}>{a.id} {a.name}</option>)}</select>}</Field>
+            <Field label="Music">{(id) => <select id={id} className="select" value={job.music} onChange={(e) => update({ music: e.target.value })}><option value="">None</option>{s.assets.filter((a) => a.type === 'Music').map((a) => <option key={a.id} value={`${a.id} ${a.notes || a.linkedTo}`}>{a.id} {a.notes || a.linkedTo}</option>)}</select>}</Field>
             <label className="check"><input type="checkbox" checked={job.subtitlesBurned} onChange={(e) => update({ subtitlesBurned: e.target.checked })} />Burn in bilingual subtitles</label>
-            <Field label="Final render URL">{(id) => <input id={id} className="input" placeholder="https://…" defaultValue={job.renderUrl} key={epId + job.renderUrl} onBlur={(e) => { if (e.target.value !== job.renderUrl) { update({ renderUrl: e.target.value }); s.toast('success', 'Render URL saved'); } }} />}</Field>
+            <Field label="Final render URL">{(id) => <input id={id} className="input" placeholder="https://…" defaultValue={job.renderUrl || ep?.finalVideoUrl} key={epId + job.renderUrl} onBlur={(e) => { if (e.target.value !== job.renderUrl) { update({ renderUrl: e.target.value }); s.updateEpisode(epId, { finalVideoUrl: e.target.value }); s.toast('success', 'Render URL saved (also EPISODES.final_video_url)'); } }} />}</Field>
             {job.renderUrl && <video src={job.renderUrl} controls style={{ width: '100%', borderRadius: 8, background: '#000', maxHeight: 360 }} />}
             <Field label="Editor notes">{(id) => <textarea id={id} className="textarea" defaultValue={job.notes} key={epId} onBlur={(e) => update({ notes: e.target.value })} />}</Field>
             <button className="btn" disabled title="Requires a verified Shotstack connection and render endpoint (next build stage)">Render with Shotstack</button>

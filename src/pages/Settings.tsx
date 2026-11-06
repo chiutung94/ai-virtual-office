@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Download, RefreshCw, RotateCcw, Upload, UploadCloud, DownloadCloud, PlugZap } from 'lucide-react';
+import { BookOpen, Download, FileSpreadsheet, RefreshCw, RotateCcw, Upload, UploadCloud, DownloadCloud, PlugZap } from 'lucide-react';
 import { useStore, type Collections } from '../store/store';
 import { api } from '../lib/api';
-import { SYNCED_SHEETS, pullSheet, pushSheet } from '../lib/sync';
-import { WORKBOOK_SHEETS } from '../../shared/sheetSchema';
+import { SYNCED_SHEETS, importWorkbookFile, pullSheet, pushSheet, type FileImportReport } from '../lib/sync';
+import { SHEETS } from '../../shared/workbook';
 import { Banner, Card, ConfirmDialog, Field, PageHead, StatusPill, fmtDateTime, download, type ConfirmOpts, SkeletonRows } from '../components/ui';
 
 type SyncResult = { ok: boolean; text: string; unmapped?: string[] };
@@ -28,6 +28,9 @@ export default function Settings() {
   const [results, setResults] = useState<Record<string, SyncResult>>({});
   const [confirm, setConfirm] = useState<ConfirmOpts | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const xlsxRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importReport, setImportReport] = useState<FileImportReport[] | null>(null);
   const sheets = s.integrations?.find((i) => i.id === 'sheets');
   const sheetsOk = sheets?.state === 'Connected';
 
@@ -52,7 +55,7 @@ export default function Settings() {
         s.updateSettings({ lastPull: new Date().toISOString() });
       } else {
         const r = await pushSheet(sheet);
-        setResults((x) => ({ ...x, [sheet]: { ok: true, text: `Pushed: ${r.updated} updated, ${r.appended} appended` } }));
+        setResults((x) => ({ ...x, [sheet]: { ok: true, text: `Pushed: ${r.updated} updated, ${r.appended} appended${r.cleared ? `, ${r.cleared} cleared` : ''}` } }));
         s.updateSettings({ lastPush: new Date().toISOString() });
       }
     } catch (e) {
@@ -74,9 +77,28 @@ export default function Settings() {
     },
   });
 
+
+  const runImport = async (f?: File) => {
+    if (!f) return;
+    setImporting(true); setImportReport(null);
+    try {
+      const rep = await importWorkbookFile(f);
+      setImportReport(rep);
+      s.updateSettings({ lastImport: new Date().toISOString() });
+      s.log({ actor: s.settings.reviewerName, message: `Imported workbook ${f.name} (${rep.reduce((a, b) => a + b.rows, 0)} rows)`, level: 'success' });
+      s.toast('success', 'Workbook imported');
+    } catch (e) { s.toast('error', `Import failed: ${(e as Error).message}`); }
+    finally { setImporting(false); if (xlsxRef.current) xlsxRef.current.value = ''; }
+  };
+  const askImport = (f?: File) => f && setConfirm({
+    title: `Import ${f.name}?`, tone: 'warning', confirmLabel: 'Import workbook',
+    message: 'Rows in the file update matching records in this browser (by ID). Blank cells never erase existing values, and records that exist only here are kept. The file is read in your browser and is not uploaded anywhere. Export a backup first if you want to be able to undo.',
+    onConfirm: () => runImport(f),
+  });
+
   const exportBackup = () => {
     const st = useStore.getState();
-    const keys: (keyof Collections)[] = ['episodes', 'characters', 'locations', 'assets', 'scriptVersions', 'shots', 'clips', 'voiceLines', 'editJobs', 'publishing', 'analytics', 'approvals', 'activity', 'budgetLines', 'expenses', 'tasks'];
+    const keys: (keyof Collections)[] = ['episodes', 'characters', 'locations', 'assets', 'scriptVersions', 'shots', 'continuity', 'scriptRuns', 'voiceLines', 'editJobs', 'publishing', 'analytics', 'approvals', 'activity', 'budgetLines', 'expenses', 'tasks'];
     download(`ai-virtual-office-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ format: 'avo-backup', version: 1, exportedAt: new Date().toISOString(), project: st.project, ...Object.fromEntries(keys.map((k) => [k, st[k]])) }, null, 2));
   };
   const importBackup = async (f?: File) => {
@@ -124,6 +146,22 @@ export default function Settings() {
         </Card>
       </div>
 
+
+      <Card className="mt16" title={<span className="row"><FileSpreadsheet size={15} />Import workbook (.xlsx)</span>} sub="Load AI OFFICE – DRAMA PRODUCTION HQ without a server connection. In Google Sheets: File → Download → Microsoft Excel (.xlsx)." actions={
+        <button className="btn primary" disabled={importing} onClick={() => xlsxRef.current?.click()}>{importing ? <span className="spinner" /> : <Upload size={14} />}Choose .xlsx file</button>
+      }>
+        <input ref={xlsxRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={(e) => askImport(e.target.files?.[0])} />
+        {!importReport && <p className="small muted">Reads every worksheet (EPISODES, PRODUCTION, CHARACTERS, LOCATIONS, SCRIPTS, SHOT_LIST, ASSETS, PUBLISHING, ANALYTICS, CONTINUITY, SCRIPT_RUNS) using the exact workbook columns. Last import: {fmtDateTime(s.settings.lastImport)}.</p>}
+        {importReport && (
+          <div className="table-wrap"><table className="table"><thead><tr><th>Worksheet</th><th>Rows</th><th>Result</th></tr></thead><tbody>
+            {importReport.map((r) => <tr key={r.sheet}><td className="mono">{r.sheet}</td><td>{r.rows}</td><td className="xs">
+              {r.missing ? <span style={{ color: 'var(--warning)' }}>{r.note}</span> : <span style={{ color: 'var(--success)' }}>Imported{r.note ? ` · ${r.note}` : ''}</span>}
+              {r.unmappedHeaders.length > 0 && <div className="faint">Not used by the app: {r.unmappedHeaders.join(', ')}</div>}
+            </td></tr>)}
+          </tbody></table></div>
+        )}
+      </Card>
+
       <Card className="mt16" title="Integrations" sub="States come from the server. “Connected” is shown only after a successful live test." actions={<button className="btn sm" onClick={refresh} disabled={refreshing}><RefreshCw size={13} className={refreshing ? 'spin' : ''} />Refresh</button>} flush>
         {s.backendOnline === false && <div style={{ padding: 16 }}><Banner tone="danger">The API server is not reachable. Start it with <code className="inline">npm run dev</code> (or <code className="inline">npm start</code> in production). Without it the app runs in local demo mode and no external service can connect.</Banner></div>}
         {s.backendOnline === null && <SkeletonRows rows={5} />}
@@ -155,11 +193,11 @@ export default function Settings() {
           <table className="table">
             <thead><tr><th>Worksheet</th><th>Purpose</th><th>Key</th><th>Sync</th><th>Last result</th></tr></thead>
             <tbody>
-              {WORKBOOK_SHEETS.map((w) => (
+              {SHEETS.map((w) => (
                 <tr key={w.sheet}>
                   <td className="mono strong">{w.sheet}</td>
                   <td className="small muted" style={{ maxWidth: 320 }}>{w.description}</td>
-                  <td className="mono xs">{w.synced ? w.columns.find((c) => c.field === w.key)?.header : '—'}</td>
+                  <td className="mono xs">{w.synced ? w.keyHeaders.join(' + ') : '—'}</td>
                   <td>{w.synced ? (
                     <div className="row nowrap">
                       <button className="btn sm" disabled={!sheetsOk || !!busySheet} onClick={() => runSync(w.sheet, 'pull').catch(() => s.toast('error', `Pull ${w.sheet} failed`))}>{busySheet === `${w.sheet}:pull` ? <span className="spinner" /> : <DownloadCloud size={12} />}Pull</button>

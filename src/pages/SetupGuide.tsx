@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { WORKBOOK_SHEETS } from '../../shared/sheetSchema';
+import { SHEETS } from '../../shared/workbook';
 import { Banner, Card, PageHead } from '../components/ui';
 import { MAKE_EVENTS } from './Settings';
 
@@ -24,7 +24,8 @@ npm start`}</pre><ul><li>Deploy to any Node host (Render, Railway, Fly.io, a VPS
 
         <Card title="2 · Google Sheets (primary database)">
           <ol className="steps" style={{ padding: 0, margin: 0 }}>
-            <li><strong>Import the workbook</strong><ul><li>Upload <code className="inline">AI_Office_Drama_Production_HQ_v3.xlsx</code> to Google Drive → Open with Google Sheets → File → Save as Google Sheets.</li><li>Copy the spreadsheet ID from the URL: <code className="inline">/spreadsheets/d/&lt;ID&gt;/edit</code></li></ul></li>
+            <li><strong>Quick start without a server:</strong> in Google Sheets choose File → Download → .xlsx, then use <Link to="/settings">Settings → Import workbook</Link>. Everything stays in your browser.</li>
+            <li><strong>For live two-way sync:</strong> copy the spreadsheet ID from the sheet's URL: <code className="inline">/spreadsheets/d/&lt;ID&gt;/edit</code></li>
             <li><strong>Create a service account</strong><ul><li>Google Cloud Console → new project → enable <em>Google Sheets API</em>.</li><li>IAM & Admin → Service Accounts → Create → Keys → Add key → JSON.</li></ul></li>
             <li><strong>Share the sheet</strong> with the service account e-mail as <em>Editor</em>.</li>
             <li><strong>Set server variables</strong><pre className="code">{`GOOGLE_SHEETS_SPREADSHEET_ID=1AbC...
@@ -36,9 +37,9 @@ GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n...\\n-----END
         </Card>
       </div>
 
-      <Card className="mt16" title="Worksheet column mapping" sub="Header matching ignores case, spaces and underscores. Unlisted columns are preserved. Add aliases in shared/sheetSchema.ts if your headers differ.">
+      <Card className="mt16" title="Worksheet column mapping" sub="Matches your workbook exactly. Other columns are never modified. SHOT_LIST gains one extra column, kling_units, for tracking Kling usage. Status codes such as SCRIPT_DRAFT and PROMPT_READY are translated automatically.">
         <div className="table-wrap"><table className="table"><thead><tr><th>Worksheet</th><th>Mode</th><th>Expected headers</th></tr></thead><tbody>
-          {WORKBOOK_SHEETS.map((w) => <tr key={w.sheet}><td className="mono strong">{w.sheet}</td><td className="small">{w.synced ? 'Read / write' : 'Reference only'}</td><td className="mono xs muted">{w.columns.map((c) => c.header).join(' · ') || '—'}</td></tr>)}
+          {SHEETS.map((w) => <tr key={w.sheet}><td className="mono strong">{w.sheet}</td><td className="small">{w.synced ? `Read / write · key ${w.keyHeaders.join(' + ')}` : 'Reference only'}</td><td className="mono xs muted">{w.headers.join(' · ') || '—'}</td></tr>)}
         </tbody></table></div>
       </Card>
 

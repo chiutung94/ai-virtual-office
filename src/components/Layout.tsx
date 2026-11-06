@@ -35,6 +35,7 @@ export default function Layout() {
   const pending = useStore((s) => s.episodes.filter((e) => ['Under Review', 'Final Review'].includes(e.approvalStatus)).length);
   const backendOnline = useStore((s) => s.backendOnline);
   const dataSource = useStore((s) => s.settings.dataSource);
+  const imported = useStore((s) => !!s.settings.lastImport);
   const sheets = useStore((s) => s.integrations?.find((i) => i.id === 'sheets'));
   const refresh = useStore((s) => s.refreshIntegrations);
 
@@ -69,7 +70,7 @@ export default function Layout() {
         <div className="sidebar-foot">
           <div className="row" style={{ marginBottom: 6 }}>
             <Database size={13} />
-            {sheetsLive ? 'Google Sheets connected' : 'Local demo mode'}
+            {sheetsLive ? 'Google Sheets connected' : imported ? 'Local copy of workbook' : 'Local demo mode'}
           </div>
           <div className="faint xs">Your AI-powered drama production studio.</div>
           <NavLink to="/settings/setup" className="xs row mt8"><BookOpen size={12} />Setup guide</NavLink>
@@ -91,7 +92,7 @@ export default function Layout() {
             title={backendOnline === false ? 'API server not reachable — data is stored in this browser only' : 'Data source'}
           >
             <span className="dot" />
-            {sheetsLive ? 'Live · Google Sheets' : backendOnline === false ? 'Demo · browser storage (API offline)' : 'Demo · browser storage'}
+            {sheetsLive ? 'Live · Google Sheets' : `${imported ? 'Imported workbook' : 'Sample data'} · browser storage${backendOnline === false ? ' (API offline)' : ''}`}
           </button>
           <button className="btn sm" onClick={() => nav('/approvals')}>Review queue{pending ? ` · ${pending}` : ''}</button>
         </header>

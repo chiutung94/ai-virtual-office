@@ -38,8 +38,8 @@ export const api = {
   testIntegration: (id: string) => req<IntegrationStatus>(`/api/integrations/${id}/test`, { method: 'POST' }),
   readSheet: (sheet: string) =>
     req<{ headers: string[]; rows: Record<string, string>[]; unmappedHeaders: string[] }>(`/api/sheets/${encodeURIComponent(sheet)}`),
-  upsertSheet: (sheet: string, records: unknown[]) =>
-    req<{ updated: number; appended: number }>(`/api/sheets/${encodeURIComponent(sheet)}/upsert`, json({ records })),
+  upsertSheet: (sheet: string, rows: unknown[]) =>
+    req<{ updated: number; appended: number; cleared: number }>(`/api/sheets/${encodeURIComponent(sheet)}/upsert`, json({ rows })),
   makeEvent: (event: string, payload: unknown) => req<{ ok: boolean }>(`/api/make/${event}`, json(payload)),
   generateScript: (payload: unknown) =>
     req<{ scenes: unknown[]; model: string; usage: unknown }>('/api/ai/generate-script', json(payload)),

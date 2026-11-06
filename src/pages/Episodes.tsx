@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Plus, X } from 'lucide-react';
-import { WORK_STATUSES, PUBLISH_STATUSES, type ApprovalStage, type Episode } from '../../shared/types';
+import { WORK_STATUSES, PUBLISH_STATUSES, publishSummary, type ApprovalStage, type Episode } from '../../shared/types';
 import { useStore } from '../store/store';
 import { addDays, epId } from '../data/seed';
 import { Card, DataTable, Empty, Field, Modal, PageHead, SearchInput, StatusPill, fmtDate, download, type Column } from '../components/ui';
-import { WORKBOOK_SHEETS, toRow } from '../../shared/sheetSchema';
+import { blankEpisode, toRows, sheetSpec } from '../../shared/workbook';
 
 const STAGES: ApprovalStage[] = ['Draft', 'Under Review', 'Changes Requested', 'Approved', 'In Production', 'Final Review', 'Ready to Publish', 'Published', 'Rejected'];
 
@@ -25,8 +25,8 @@ export default function Episodes() {
   const rows = useMemo(() => {
     const t = q.trim().toLowerCase();
     return episodes.filter((e) =>
-      (!t || [e.id, e.titleZh, e.titleEn, e.synopsis].some((f) => f.toLowerCase().includes(t))) &&
-      (!stage || e.approvalStatus === stage) && (!script || e.scriptStatus === script) && (!video || e.videoStatus === video) && (!pub || e.publishingStatus === pub));
+      (!t || [e.id, e.titleZh, e.titleEn, e.synopsis, e.cliffhanger].some((f) => f.toLowerCase().includes(t))) &&
+      (!stage || e.approvalStatus === stage) && (!script || e.scriptStatus === script) && (!video || e.videoStatus === video) && (!pub || publishSummary(e) === pub));
   }, [episodes, q, stage, script, video, pub]);
   const filtered = q || stage || script || video || pub;
 
@@ -44,15 +44,16 @@ export default function Episodes() {
     { key: 'video', header: 'Video', sort: (e) => e.videoStatus, render: (e) => <StatusPill status={e.videoStatus} /> },
     { key: 'edit', header: 'Editing', sort: (e) => e.editingStatus, render: (e) => <StatusPill status={e.editingStatus} />, className: 'hide-md' },
     { key: 'approval', header: 'Approval', sort: (e) => STAGES.indexOf(e.approvalStatus), render: (e) => <StatusPill status={e.approvalStatus} /> },
-    { key: 'pub', header: 'Publishing', sort: (e) => e.publishingStatus, render: (e) => <StatusPill status={e.publishingStatus} />, className: 'hide-md' },
+    { key: 'pub', header: 'IG / TikTok', sort: (e) => publishSummary(e), render: (e) => <div className="col gap4"><span className="xs muted nowrap">IG <StatusPill status={e.instagramStatus} dot={false} /></span><span className="xs muted nowrap">TT <StatusPill status={e.tiktokStatus} dot={false} /></span></div>, className: 'hide-md' },
     { key: 'date', header: 'Target date', sort: (e) => e.targetPublishDate, render: (e) => <span className="nowrap small">{fmtDate(e.targetPublishDate)}</span> },
   ];
 
   const exportCsv = () => {
-    const def = WORKBOOK_SHEETS.find((s) => s.sheet === 'EPISODES')!;
-    const head = def.columns.map((c) => c.header);
+    const st = useStore.getState();
+    const head = sheetSpec('EPISODES')!.headers;
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const lines = [head.join(','), ...rows.map((e) => { const r = toRow(def, e as unknown as Record<string, unknown>); return head.map((h) => esc(r[h])).join(','); })];
+    const data = toRows('EPISODES', { ...st, episodes: rows });
+    const lines = [head.join(','), ...data.map((r) => head.map((h) => esc(r[h])).join(','))];
     download('EPISODES.csv', '﻿' + lines.join('\n'), 'text/csv;charset=utf-8');
   };
 
@@ -68,7 +69,7 @@ export default function Episodes() {
           <select className="select" style={{ width: 170 }} value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Approval status"><option value="">All approval stages</option>{STAGES.map((s) => <option key={s}>{s}</option>)}</select>
           <select className="select" style={{ width: 150 }} value={script} onChange={(e) => setScript(e.target.value)} aria-label="Script status"><option value="">Script: any</option>{WORK_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
           <select className="select" style={{ width: 150 }} value={video} onChange={(e) => setVideo(e.target.value)} aria-label="Video status"><option value="">Video: any</option>{WORK_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
-          <select className="select" style={{ width: 160 }} value={pub} onChange={(e) => setPub(e.target.value)} aria-label="Publishing status"><option value="">Publishing: any</option>{PUBLISH_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <select className="select" style={{ width: 160 }} value={pub} onChange={(e) => setPub(e.target.value)} aria-label="Publishing status"><option value="">Publishing (lowest): any</option>{PUBLISH_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
           {filtered && <button className="btn ghost sm" onClick={() => { setQ(''); setStage(''); setScript(''); setVideo(''); setPub(''); }}><X size={13} />Clear</button>}
         </div>
         <DataTable rows={rows} columns={cols} rowKey={(e) => e.id} onRowClick={(e) => nav(`/episodes/${e.id}`)} pageSize={15}
@@ -99,9 +100,8 @@ function CreateEpisode({ open, onClose, onCreate, nextNumber, startDate, existin
     setErr(e);
     if (Object.keys(e).length) return;
     onCreate({
-      id: epId(f.number), number: f.number, titleZh: f.titleZh.trim(), titleEn: f.titleEn.trim(), synopsis: f.synopsis.trim(), arc: 'Extra',
-      scriptStatus: 'Not Started', storyboardStatus: 'Not Started', videoStatus: 'Not Started', editingStatus: 'Not Started',
-      approvalStatus: 'Draft', publishingStatus: 'Not Scheduled', targetPublishDate: f.date, targetDuration: f.targetDuration, notes: '', updatedAt: new Date().toISOString(),
+      ...blankEpisode(epId(f.number), useStore.getState().project), titleZh: f.titleZh.trim(), titleEn: f.titleEn.trim(), synopsis: f.synopsis.trim(), arc: 'Extra',
+      targetPublishDate: f.date, targetDuration: f.targetDuration,
     });
     onClose();
   };
@@ -112,7 +112,7 @@ function CreateEpisode({ open, onClose, onCreate, nextNumber, startDate, existin
         <Field label="Target publish date">{(id) => <input id={id} type="date" className="input" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />}</Field>
         <Field label="Chinese title" error={err.titleZh}>{(id) => <input id={id} className="input zh" value={f.titleZh} onChange={(e) => setF({ ...f, titleZh: e.target.value })} />}</Field>
         <Field label="English title" error={err.titleEn}>{(id) => <input id={id} className="input" value={f.titleEn} onChange={(e) => setF({ ...f, titleEn: e.target.value })} />}</Field>
-        <Field label="Synopsis" className="full">{(id) => <textarea id={id} className="textarea" value={f.synopsis} onChange={(e) => setF({ ...f, synopsis: e.target.value })} />}</Field>
+        <Field label="Logline" className="full">{(id) => <textarea id={id} className="textarea" value={f.synopsis} onChange={(e) => setF({ ...f, synopsis: e.target.value })} />}</Field>
         <Field label="Target duration (seconds)" error={err.targetDuration}>{(id) => <input id={id} type="number" className="input" value={f.targetDuration} onChange={(e) => setF({ ...f, targetDuration: Number(e.target.value) })} />}</Field>
       </div>
     </Modal>

@@ -14,7 +14,7 @@ function sampleData(start: string): AnalyticsEntry[] {
   return Array.from({ length: 14 }).flatMap((_, i) => (['TikTok', 'Instagram'] as Platform[]).map((p) => {
     const base = (p === 'TikTok' ? 18000 : 9000) * (1 + i * 0.12) * (0.8 + rnd() * 0.4);
     const views = Math.round(base);
-    return { id: `S${i}${p}`, episodeId: `EP${String(i + 1).padStart(3, '0')}`, platform: p, date: addDays(start, i), views, likes: Math.round(views * (0.06 + rnd() * 0.03)), comments: Math.round(views * (0.006 + rnd() * 0.004)), shares: Math.round(views * (0.01 + rnd() * 0.01)), completionRate: Math.round(38 + rnd() * 25), followersGained: Math.round(views * (0.004 + rnd() * 0.004)), source: 'manual' as const };
+    return { id: `S${i}${p}`, episodeId: `EP${String(i + 1).padStart(3, '0')}`, platform: p, postedAt: addDays(start, i), views, avgWatchSec: Math.round(30 + rnd() * 30), saves: Math.round(views * 0.008), notes: '', likes: Math.round(views * (0.06 + rnd() * 0.03)), comments: Math.round(views * (0.006 + rnd() * 0.004)), shares: Math.round(views * (0.01 + rnd() * 0.01)), completionRate: Math.round(38 + rnd() * 25), followersGained: Math.round(views * (0.004 + rnd() * 0.004)), source: 'manual' as const };
   }));
 }
 
@@ -34,7 +34,7 @@ export default function Analytics() {
 
   const byDate = useMemo(() => {
     const m = new Map<string, { date: string; TikTok: number; Instagram: number }>();
-    data.forEach((d) => { const r = m.get(d.date) ?? { date: d.date, TikTok: 0, Instagram: 0 }; r[d.platform] += d.views; m.set(d.date, r); });
+    data.forEach((d) => { const k = d.postedAt.slice(0, 10); const r = m.get(k) ?? { date: k, TikTok: 0, Instagram: 0 }; r[d.platform] += d.views; m.set(k, r); });
     return [...m.values()].sort((a, b) => a.date.localeCompare(b.date));
   }, [data]);
   const byPlatform = useMemo(() => (['TikTok', 'Instagram'] as Platform[]).map((p) => {
@@ -45,9 +45,9 @@ export default function Analytics() {
 
   const saveEntry = () => {
     if (!add) return;
-    if (!add.episodeId || !add.date) { s.toast('error', 'Episode and date are required'); return; }
+    if (!add.episodeId || !add.postedAt) { s.toast('error', 'Episode and date are required'); return; }
     if (add.views < 0 || add.completionRate < 0 || add.completionRate > 100) { s.toast('error', 'Check the numbers (completion is 0–100)'); return; }
-    s.upsert('analytics', add); s.toast('success', 'Metrics recorded'); setAdd(null); setMode('real');
+    s.upsert('analytics', { ...add, id: `${add.episodeId}-${add.platform}-${add.postedAt}` }); s.toast('success', 'Metrics recorded'); setAdd(null); setMode('real');
   };
 
   return (
@@ -57,7 +57,7 @@ export default function Analytics() {
           <button aria-pressed={mode === 'real'} onClick={() => setMode('real')}>Recorded data ({s.analytics.length})</button>
           <button aria-pressed={mode === 'sample'} onClick={() => setMode('sample')}>Sample preview</button>
         </div>
-        <button className="btn primary" onClick={() => setAdd({ id: uid('m'), episodeId: 'EP001', platform: 'TikTok', date: new Date().toISOString().slice(0, 10), views: 0, likes: 0, comments: 0, shares: 0, completionRate: 0, followersGained: 0, source: 'manual' })}><Plus size={15} />Record metrics</button>
+        <button className="btn primary" onClick={() => setAdd({ id: uid('m'), episodeId: 'EP001', platform: 'TikTok', postedAt: new Date().toISOString().slice(0, 10), views: 0, avgWatchSec: 0, saves: 0, notes: '', likes: 0, comments: 0, shares: 0, completionRate: 0, followersGained: 0, source: 'manual' })}><Plus size={15} />Record metrics</button>
       </>} />
       <div className="mb16">
         {mode === 'sample'
@@ -70,7 +70,7 @@ export default function Analytics() {
       ) : (
         <>
           <div className="grid g6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-            <Stat label="Views" value={fmtNum(tot.views)} hint={mode === 'sample' ? <SampleBadge label="Sample" /> : undefined} />
+            <Stat label="Views (24h)" value={fmtNum(tot.views)} hint={mode === 'sample' ? <SampleBadge label="Sample" /> : undefined} />
             <Stat label="Likes" value={fmtNum(tot.likes)} />
             <Stat label="Comments" value={fmtNum(tot.comments)} />
             <Stat label="Shares" value={fmtNum(tot.shares)} />
@@ -112,13 +112,15 @@ export default function Analytics() {
           </div>
           <Card className="mt16" title="Per-post metrics" sub="Table view" flush>
             <DataTable rows={data} rowKey={(r) => r.id} pageSize={10} initialSort={{ key: 'date', dir: -1 }} columns={[
-              { key: 'date', header: 'Date', sort: (r) => r.date, render: (r) => fmtDate(r.date) },
+              { key: 'date', header: 'Posted', sort: (r) => r.postedAt, render: (r) => fmtDate(r.postedAt.slice(0, 10)) },
               { key: 'ep', header: 'Episode', sort: (r) => r.episodeId, render: (r) => <span className="mono">{r.episodeId}</span> },
               { key: 'pl', header: 'Platform', sort: (r) => r.platform, render: (r) => <span className="tag">{r.platform}</span> },
-              { key: 'v', header: 'Views', sort: (r) => r.views, render: (r) => r.views.toLocaleString() },
+              { key: 'w', header: 'Avg watch', sort: (r) => r.avgWatchSec, render: (r) => `${r.avgWatchSec}s` },
+              { key: 'v', header: 'Views 24h', sort: (r) => r.views, render: (r) => r.views.toLocaleString() },
               { key: 'l', header: 'Likes', sort: (r) => r.likes, render: (r) => r.likes.toLocaleString() },
               { key: 'c', header: 'Comments', sort: (r) => r.comments, render: (r) => r.comments.toLocaleString() },
               { key: 's', header: 'Shares', sort: (r) => r.shares, render: (r) => r.shares.toLocaleString() },
+              { key: 'sv', header: 'Saves', sort: (r) => r.saves, render: (r) => r.saves.toLocaleString() },
               { key: 'e', header: 'Eng.', sort: (r) => (r.likes + r.comments + r.shares) / (r.views || 1), render: (r) => `${(((r.likes + r.comments + r.shares) / (r.views || 1)) * 100).toFixed(1)}%` },
               { key: 'cr', header: 'Completion', sort: (r) => r.completionRate, render: (r) => `${r.completionRate}%` },
               { key: 'f', header: 'Followers', sort: (r) => r.followersGained, render: (r) => `+${r.followersGained}` },
@@ -132,9 +134,9 @@ export default function Analytics() {
         {add && <div className="form-grid">
           <Field label="Episode">{(id) => <select id={id} className="select" value={add.episodeId} onChange={(e) => setAdd({ ...add, episodeId: e.target.value })}>{s.episodes.map((e) => <option key={e.id}>{e.id}</option>)}</select>}</Field>
           <Field label="Platform">{(id) => <select id={id} className="select" value={add.platform} onChange={(e) => setAdd({ ...add, platform: e.target.value as Platform })}><option>TikTok</option><option>Instagram</option></select>}</Field>
-          <Field label="Date">{(id) => <input id={id} type="date" className="input" value={add.date} onChange={(e) => setAdd({ ...add, date: e.target.value })} />}</Field>
-          {(['views', 'likes', 'comments', 'shares', 'completionRate', 'followersGained'] as const).map((k) => (
-            <Field key={k} label={{ views: 'Views', likes: 'Likes', comments: 'Comments', shares: 'Shares', completionRate: 'Completion rate (%)', followersGained: 'Followers gained' }[k]}>{(id) => <input id={id} type="number" min={0} className="input" value={add[k]} onChange={(e) => setAdd({ ...add, [k]: Number(e.target.value) })} />}</Field>
+          <Field label="Posted on">{(id) => <input id={id} type="date" className="input" value={add.postedAt} onChange={(e) => setAdd({ ...add, postedAt: e.target.value })} />}</Field>
+          {(['views', 'avgWatchSec', 'completionRate', 'likes', 'comments', 'shares', 'saves', 'followersGained'] as const).map((k) => (
+            <Field key={k} label={{ views: 'Views (first 24h)', avgWatchSec: 'Avg watch time (s)', likes: 'Likes', comments: 'Comments', shares: 'Shares', saves: 'Saves', completionRate: 'Completion rate (%)', followersGained: 'Followers gained' }[k]}>{(id) => <input id={id} type="number" min={0} className="input" value={add[k]} onChange={(e) => setAdd({ ...add, [k]: Number(e.target.value) })} />}</Field>
           ))}
         </div>}
       </Modal>

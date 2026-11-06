@@ -81,7 +81,7 @@ export const SampleBadge = ({ label = 'Sample data' }: { label?: string }) => (
 export function Progress({ value, tone }: { value: number; tone?: 'success' | 'warning' | 'danger' }) {
   const v = Math.max(0, Math.min(100, value));
   return (
-    <div className={`progress ${tone ?? ''}`} role="progressbar" aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
+    <div className={`progressbar ${tone ?? ''}`} role="progressbar" aria-valuenow={Math.round(v)} aria-valuemin={0} aria-valuemax={100}>
       <div style={{ width: `${v}%` }} />
     </div>
   );
