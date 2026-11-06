@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { IntegrationStatus } from '../shared/types.js';
-import { HttpError, readSheet, sheetsConfigured, testSheets, upsertSheet } from './sheets.js';
+import { HttpError, readSheet, sheetsConfigProblem, sheetsConfigured, testSheets, upsertSheet } from './sheets.js';
 import { SHEETS } from '../shared/workbook.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ interface ServiceDef {
   missing: string;
 }
 const SERVICES: ServiceDef[] = [
-  { id: 'sheets', name: 'Google Sheets', configured: sheetsConfigured, testable: true, missing: 'GOOGLE_SHEETS_SPREADSHEET_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY' },
+  { id: 'sheets', name: 'Google Sheets', configured: sheetsConfigured, testable: true, missing: 'GOOGLE_SHEETS_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_KEY_FILE' },
   { id: 'make', name: 'Make.com', configured: () => env('MAKE_WEBHOOK_URL'), testable: true, missing: 'MAKE_WEBHOOK_URL' },
   { id: 'openai', name: 'OpenAI (AI Head Writer)', configured: () => env('OPENAI_API_KEY'), testable: true, missing: 'OPENAI_API_KEY' },
   { id: 'kling', name: 'Kling AI (Video)', configured: () => env('KLING_ACCESS_KEY') && env('KLING_SECRET_KEY'), testable: false, missing: 'KLING_ACCESS_KEY, KLING_SECRET_KEY' },
@@ -46,7 +46,7 @@ function statusOf(s: ServiceDef): IntegrationStatus {
   const t = tests[s.id];
   const configured = s.configured();
   let state: IntegrationStatus['state'] = 'Not Connected';
-  let detail = `Not configured. Set ${s.missing} in the server .env file.`;
+  let detail = s.id === 'sheets' ? `Not configured. ${sheetsConfigProblem()}` : `Not configured. Set ${s.missing} in the server .env file.`;
   if (configured) {
     if (t?.ok) {
       state = 'Connected';

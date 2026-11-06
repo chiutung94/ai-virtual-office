@@ -1,16 +1,38 @@
 // Google Sheets integration (server-side only).
 // Uses a service account (JWT) — the private key never leaves the server.
+import fs from 'node:fs';
+import path from 'node:path';
 import { JWT } from 'google-auth-library';
 import { SHEETS, normKey, normaliseHeader, sheetSpec, type Row } from '../shared/workbook.js';
 
 const API = 'https://sheets.googleapis.com/v4/spreadsheets';
 
+/** Credentials from GOOGLE_SERVICE_ACCOUNT_KEY_FILE (the downloaded JSON) or the email + key variables. */
+function credentials(): { email: string; key: string } | null {
+  const file = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE?.trim();
+  if (file) {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
+      if (j.client_email && j.private_key) return { email: j.client_email, key: j.private_key };
+    } catch {
+      return null;
+    }
+  }
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
+  const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  return email && key ? { email, key } : null;
+}
+
 export function sheetsConfigured() {
-  return Boolean(
-    process.env.GOOGLE_SHEETS_SPREADSHEET_ID &&
-      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-      process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
-  );
+  return Boolean(process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim() && credentials());
+}
+
+/** Human-readable reason when Sheets is not configured. */
+export function sheetsConfigProblem() {
+  const file = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE?.trim();
+  if (!process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim()) return 'Set GOOGLE_SHEETS_SPREADSHEET_ID in .env.';
+  if (file && !credentials()) return `Could not read the key file “${file}” (path: ${path.resolve(file)}). Check the file name and that it is the JSON downloaded from Google Cloud.`;
+  return 'Set GOOGLE_SERVICE_ACCOUNT_KEY_FILE (path to the downloaded JSON) in .env.';
 }
 
 export class HttpError extends Error {
@@ -23,9 +45,10 @@ let client: JWT | null = null;
 function auth() {
   if (!sheetsConfigured()) throw new HttpError(412, 'Google Sheets is not configured on the server (.env).');
   if (!client) {
+    const c = credentials()!;
     client = new JWT({
-      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+      email: c.email,
+      key: c.key,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
   }

@@ -4,3 +4,7 @@ dist
 uploads/*
 !uploads/.gitkeep
 server/.state.json
+
+# Credentials — never commit
+*service-account*.json
+*.pem

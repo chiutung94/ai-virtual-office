@@ -29,8 +29,7 @@ npm start`}</pre><ul><li>Deploy to any Node host (Render, Railway, Fly.io, a VPS
             <li><strong>Create a service account</strong><ul><li>Google Cloud Console → new project → enable <em>Google Sheets API</em>.</li><li>IAM & Admin → Service Accounts → Create → Keys → Add key → JSON.</li></ul></li>
             <li><strong>Share the sheet</strong> with the service account e-mail as <em>Editor</em>.</li>
             <li><strong>Set server variables</strong><pre className="code">{`GOOGLE_SHEETS_SPREADSHEET_ID=1AbC...
-GOOGLE_SERVICE_ACCOUNT_EMAIL=avo@project.iam.gserviceaccount.com
-GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"`}</pre></li>
+GOOGLE_SERVICE_ACCOUNT_KEY_FILE=google-service-account.json`}</pre><ul><li>Put the downloaded JSON key in the project folder and rename it <code className="inline">google-service-account.json</code>. It is git-ignored and never leaves your computer.</li></ul></li>
             <li><strong>Restart the server</strong>, open <Link to="/settings">Settings</Link> → Google Sheets → <em>Test connection</em>. The test lists missing worksheets.</li>
             <li><strong>Pull first</strong>, review, then switch Data source to Google Sheets. Push only after checking a backup of the workbook.</li>
           </ol>
