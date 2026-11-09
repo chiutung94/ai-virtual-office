@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { ImageOff, Pencil, Plus, Trash2, User } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ImageOff, Pencil, Plus, Trash2, Upload, User } from 'lucide-react';
 import type { Character } from '../../shared/types';
 import { useStore } from '../store/store';
+import { api } from '../lib/api';
 import { Card, ConfirmDialog, Empty, Field, Modal, PageHead, SearchInput, type ConfirmOpts } from '../components/ui';
 
 const blank = (n: number): Character => ({ id: `C${String(n).padStart(2, '0')}`, nameZh: '', nameEn: '', age: 30, role: '', appearance: '', wardrobeLock: '', voice: '', continuity: '', imageUrl: '', fullBodyUrl: '', expressionSheetUrl: '' });
@@ -34,6 +35,31 @@ export default function Characters() {
     toast('success', `${c.id} saved`);
     setEdit(null);
   };
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadKey, setUploadKey] = useState<'imageUrl' | 'fullBodyUrl' | 'expressionSheetUrl' | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const onImage = async (f?: File) => {
+    if (!f || !uploadKey || !edit) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(f.type)) { toast('error', 'Please choose a PNG, JPG or WebP image.'); return; }
+    setUploading(true);
+    try {
+      const r = await api.upload(f);
+      setEdit((e) => (e ? { ...e, c: { ...e.c, [uploadKey]: r.url } } : e));
+      toast('success', `${f.name} uploaded — click Save character to keep it`);
+    } catch (e) { toast('error', `Upload failed: ${(e as Error).message}. Is the app running with npm run dev?`); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
+  const ImageField = (k: 'imageUrl' | 'fullBodyUrl' | 'expressionSheetUrl', label: string, full = false) => (
+    <Field label={label} error={err[k]} className={full ? 'full' : ''} hint="Upload an image from your computer, or paste a link.">
+      {(id) => (
+        <div className="row" style={{ alignItems: 'flex-start' }}>
+          {edit!.c[k] ? <img src={edit!.c[k]} alt="" style={{ width: 44, height: 56, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)', flexShrink: 0 }} /> : null}
+          <input id={id} className="input" value={edit!.c[k]} placeholder="https://… or upload" onChange={(e) => setEdit({ ...edit!, c: { ...edit!.c, [k]: e.target.value } })} />
+          <button type="button" className="btn" disabled={uploading} onClick={() => { setUploadKey(k); fileRef.current?.click(); }}>{uploading && uploadKey === k ? <span className="spinner" /> : <Upload size={14} />}Upload</button>
+        </div>
+      )}
+    </Field>
+  );
   const F = (k: keyof Character, label: string, area = false, full = false) => (
     <Field label={label} error={err[k]} className={full ? 'full' : ''}>
       {(id) => area
@@ -99,12 +125,13 @@ export default function Characters() {
             {F('wardrobeLock', 'Wardrobe lock', true)}
             {F('voice', 'Voice description', true)}
             {F('continuity', 'Continuity notes', true, true)}
-            {F('imageUrl', 'Master portrait URL (identity anchor)', false, true)}
-            {F('fullBodyUrl', 'Full-body reference URL')}
-            {F('expressionSheetUrl', 'Expression sheet URL')}
+            {ImageField('imageUrl', 'Master portrait (identity anchor — close-up face)', true)}
+            {ImageField('fullBodyUrl', 'Full-body reference (wardrobe)', true)}
+            {ImageField('expressionSheetUrl', 'Expression sheet (optional)', true)}
           </div>
         )}
       </Modal>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => onImage(e.target.files?.[0])} aria-hidden />
       <ConfirmDialog opts={confirm} onClose={() => setConfirm(null)} />
     </>
   );
