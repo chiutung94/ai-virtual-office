@@ -471,7 +471,10 @@ export const IMPORT_ORDER = ['CHARACTERS', 'LOCATIONS', 'EPISODES', 'PRODUCTION'
 
 /** Parse an AI output_json (SCRIPT_RUNS) into scenes. Accepts workbook-style or app-style keys. */
 export function scenesFromAiJson(json: string, characters: Character[], uid: (p: string) => string): Scene[] {
-  const data = JSON.parse(json);
+  // Tolerate code fences or a sentence around the JSON (common when the model isn't in strict JSON mode).
+  const raw = json.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  const start = raw.indexOf('{'), end = raw.lastIndexOf('}');
+  const data = JSON.parse(start >= 0 && end > start ? raw.slice(start, end + 1) : raw);
   const arr: Record<string, unknown>[] = Array.isArray(data) ? data : data.scenes ?? data.script?.scenes ?? [];
   if (!Array.isArray(arr) || !arr.length) throw new Error('No scenes found in output_json');
   return arr.map((x, i) => {

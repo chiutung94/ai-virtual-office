@@ -109,3 +109,21 @@ Continue directly from the previous episode; keep wardrobe and positions consist
 2. In Make: **Run once**. All five modules should show a green tick.
 3. In the sheet, RUN-EP001-001 should now show `queue_status = REVIEW` with JSON in `output_json`.
 4. In the app: **Check for results → Load into editor**, read it, then **Accept as new version** or **Reject output**.
+
+## Option: use Claude instead of OpenAI for Module 3
+
+Claude writes the script; video still comes from Kling either way.
+
+1. Create an API key at https://console.anthropic.com → **Settings → API keys**, and add prepaid credit under
+   **Settings → Billing** (separate from a Claude.ai subscription). Set a monthly spend limit under **Limits**.
+2. In Make, replace Module 3 with **Anthropic Claude → Create a Prompt** (add the API key as the connection).
+3. Model: `claude-opus-5-5` (type it in with the *Map* toggle if it isn't in the dropdown).
+   Cheaper alternatives: `claude-sonnet-5-5` or `claude-haiku-5-5`.
+4. Max tokens: **16000**. Leave temperature / top P / top K **empty**.
+5. System prompt and user message: the same text as above. Add to the end of the system prompt:
+   `Return only the JSON object — no code fences, no text before or after it.`
+6. Module 4 (Parse JSON) and Module 5 (`output_json`) map Claude's **text** output instead of the OpenAI Result.
+   The app also accepts output wrapped in ```json fences.
+
+Approximate cost per episode script (about 1.5K input + 2–4K output tokens):
+Opus 5.5 ≈ US$0.05–0.10 · Sonnet 5.5 ≈ US$0.02–0.05 · Haiku 5.5 ≈ US$0.002.
