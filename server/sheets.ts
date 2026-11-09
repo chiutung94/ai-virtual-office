@@ -18,6 +18,18 @@ function resolveKeyFile(file: string) {
 }
 function credentials(): { email: string; key: string } | null {
   keyProblem = '';
+  // Whole JSON key in an environment variable (for cloud / scheduled runs).
+  const inline = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON?.trim();
+  if (inline) {
+    try {
+      const j = JSON.parse(inline.replace(/^\uFEFF/, ''));
+      if (j.client_email && j.private_key) return { email: j.client_email, key: j.private_key };
+      keyProblem = 'GOOGLE_SERVICE_ACCOUNT_KEY_JSON is not a service-account key (no client_email/private_key).';
+    } catch {
+      keyProblem = 'GOOGLE_SERVICE_ACCOUNT_KEY_JSON is not valid JSON. Paste the whole downloaded key file.';
+    }
+    return null;
+  }
   const file = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE?.trim();
   if (file) {
     const p = resolveKeyFile(file);

@@ -10,7 +10,8 @@
     "dev:api": "tsx watch server/index.ts",
     "build": "tsc --noEmit && vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "queue": "tsx scripts/script-queue.ts"
   },
   "dependencies": {
     "dotenv": "16.4.5",
