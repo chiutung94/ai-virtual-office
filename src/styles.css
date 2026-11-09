@@ -310,7 +310,7 @@ pre.code { font-family: var(--mono); font-size: 12px; background: var(--bg-2); b
 /* ── Virtual Office ───────────────────────────────── */
 .office-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 @media (max-width: 1100px) { .office-wrap { grid-template-columns: 1fr; } }
-.office-map { position: relative; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: #1a1712; outline: none; }
+.office-map { position: relative; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: #a6d48b; outline: none; }
 .office-map:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .office-map svg { image-rendering: pixelated; }
 .office-map svg text { shape-rendering: auto; }
