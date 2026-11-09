@@ -14,6 +14,7 @@ import Characters from './pages/Characters';
 import Locations from './pages/Locations';
 import Departments from './pages/Departments';
 import VideoProduction from './pages/VideoProduction';
+import KlingPack from './pages/KlingPack';
 import Voice from './pages/Voice';
 import Editing from './pages/Editing';
 import Approvals from './pages/Approvals';
@@ -41,6 +42,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Route path="locations" element={<Locations />} />
           <Route path="departments" element={<Departments />} />
           <Route path="video" element={<VideoProduction />} />
+          <Route path="video/kling" element={<KlingPack />} />
           <Route path="voice" element={<Voice />} />
           <Route path="editing" element={<Editing />} />
           <Route path="approvals" element={<Approvals />} />

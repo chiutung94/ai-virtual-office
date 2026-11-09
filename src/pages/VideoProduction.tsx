@@ -68,6 +68,7 @@ export default function VideoProduction() {
         {ep && <label className="row small muted">Video status <select className="select" style={{ width: 160 }} value={ep.videoStatus} onChange={(e) => { s.updateEpisode(ep.id, { videoStatus: e.target.value as WorkStatus }); s.toast('success', 'Video status updated'); }}>{WORK_STATUSES.map((w) => <option key={w}>{w}</option>)}</select></label>}
         <button className="btn" disabled title="Requires a verified Kling AI connection (next build stage)"><Play size={14} />Generate with Kling</button>
         <Link className="btn" to={`/storyboard?ep=${epId}`}>Edit prompts</Link>
+        <Link className="btn primary" to={`/video/kling?ep=${epId}`}>Open Kling pack</Link>
       </>} flush>
         <DataTable rows={shots} rowKey={(r) => r.id} pageSize={25} columns={[
           { key: 'sc', header: 'Shot', sort: (r) => r.sceneNumber * 100 + r.shotNumber, render: (r) => <div className="nowrap"><div className="mono">{r.id.replace(`${epId}-`, '')}</div><div className="xs muted">S{r.sceneNumber}·{r.shotNumber} · {r.duration}s</div></div> },
